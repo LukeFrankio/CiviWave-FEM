@@ -87,6 +87,8 @@ __pycache__/
 # GitHub workflows
 /.github/chatmodes
 /.github/instructions
+/.githubs/scripts
+/.github/projects
 
 # Reference documentation
 /RefDocs
