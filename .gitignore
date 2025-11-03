@@ -1,2 +1,91 @@
+#############################
+# CiviWave-FEM Ignore Rules #
+#############################
+
+# CMake build directories and caches
+/build/
+/out/
+/dist/
+CMakeFiles/
+CMakeCache.txt
+cmake-build*/
+
+# IDE and tooling state
+.vscode/
+.idea/
+.vs/
+.clangd/
+.cache/
+.ccls-cache/
+
+# Compiler outputs
+*.obj
+*.o
+*.lo
+*.la
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+*.exe
+*.out
+*.pdb
+*.ilk
+
+# Generated intermediates
+*.exp
+*.idb
+*.ipdb
+*.iobj
+*.pch
+*.pdb
+*.rsp
+*.mod
+*.fatbin
+*.ptx
+
+# Logs
+*.log
+*.tlog
+*.diag
+
+# Coverage and testing artifacts
+*.gcno
+*.gcda
+*.gcov
+*.profraw
+*.profdata
+/coverage/
+
+# Package managers
+vcpkg_installed/
+_deps/
+
+# OS junk
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.swp
+*.swo
+*.tmp
+
+# Python helpers (for scripts directory)
+__pycache__/
+*.pyc
+
+# Documentation build outputs
+/docs/_build/
+/docs/html/
+/docs/latex/
+
+# Crash dumps
+*.dmp
+*.mdmp
+*.core
+
+# GitHub workflows
 /.github
+
+# Reference documentation
 /RefDocs
