@@ -1,0 +1,49 @@
+# Canonical toolchain and dependency versions for CiviWave-FEM
+# Philosophy: prefer latest stable or beta; pins below reflect known-good as of 2025-11-03
+# See docs/dependencies.md for source-first policy and upgrade workflow.
+
+meta:
+  project: CiviWave-FEM
+  generated_at: 2025-11-03
+  policy: latest-preferred  # prefer newest (stable or beta); pins are minimum known-good
+  update_cadence: weekly    # review and bump weekly; immediately for security updates
+
+versions:
+  gcc:
+    preferred: 15.2
+    minimum: 15.0
+    standard: c++2c  # C++26
+    notes: "Use -std=c++2c (or -std=gnu++2c where guarded GNU extensions are required)."
+  cmake:
+    preferred: 4.1.2
+    minimum: 3.25
+    notes: "Presets required; prefer Ninja generator."
+  vulkan_api:
+    preferred: 1.4
+    minimum: 1.3
+    notes: "Target 1.4 features where available; gate at runtime for 1.3 devices."
+  vulkan_sdk:
+    preferred: 1.4.328.1
+    minimum: 1.3.290
+    notes: "Headers/tools; validation layers for Debug."
+  slang:
+    preferred: 2025.18
+    minimum: 2025.10
+    notes: "Build slangc and runtime from source via FetchContent."
+  vma:
+    preferred: 3.3.0
+    minimum: 3.2.0
+    notes: "Header-only; pin via FetchContent for reproducibility."
+  yaml_cpp:
+    preferred: 0.8.0
+    minimum: 0.7.0
+    notes: "Build static; BUILD_TESTING=OFF."
+  doxygen:
+    preferred: 1.15
+    minimum: 1.10
+    notes: "HTML docs; prefer latest beta, enable dot/Graphviz for diagrams."
+
+notes:
+  - "These versions align with PLAN.md and SPEC.md as of 2025-11-03."
+  - "CI should validate toolchain versions and fail fast when older than minimum."
+  - "When a newer release exists, prefer it; update this file and docs accordingly."

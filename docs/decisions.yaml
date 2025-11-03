@@ -23,3 +23,28 @@
   follow_up: |
     Revisit toolchain versions quarterly and update this ADR with rationale for
     upgrades or compatibility constraints.
+
+- id: ADR-0002
+  title: "Canonical versions file and developer setup guides"
+  date: 2025-11-03
+  status: accepted
+  context: |
+    Phase 1 requires a canonical place for version pins and clear setup
+    instructions for Windows and Linux developers. The project follows a
+    latest-preferred policy, so pins represent minimum known-good versions
+    rather than hard caps.
+  decision: |
+    Introduce `docs/versions.yaml` as the living source of truth for toolchain
+    and dependency versions. Add developer setup guides: `docs/dev-setup-windows.md`
+    and `docs/dev-setup-linux.md`. Document compiler extensions policy in
+    `docs/extensions.md` and dependency sourcing rules in `docs/dependencies.md`.
+  consequences: |
+    CI and local environments validate against `docs/versions.yaml`. New
+    contributors have platform-specific setup instructions. Extension usage is
+    centralized behind macros and governed by documented safety rules. System
+    packages are allowed only when ABI/version/flags match; otherwise, CMake
+    `FetchContent` builds from source.
+  follow_up: |
+    Review and bump preferred versions in `docs/versions.yaml` weekly.
+    Update CI images and FetchContent pins accordingly. Add ABI fingerprinting
+    in CMake modules to force dependency rebuilds on compiler/flag changes.
