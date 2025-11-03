@@ -31,7 +31,7 @@ stresses without leaving the comfort of GCC 15.2.
 | Slang           | 2025.18 | 2025.18+  | slangc builds as part of the configure step |
 | yaml-cpp        | 0.8.0   | 0.8.0+    | Pulled via FetchContent unless ABI matched  |
 | Vulkan Memory Allocator | 3.3.0 | 3.3.0+ | Header-only goodness, still pinned though |
-| Doxygen         | 1.12    | 1.12+     | Generates the documentation drip (CI runs it) |
+| Doxygen         | 1.15    | 1.15+     | Generates the documentation drip (CI runs it) |
 
 ## Project structure (growing soon™)
 
@@ -63,7 +63,7 @@ The full playbook lives in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - Validation matrix: [`docs/validation.md`](docs/validation.md)
 - AMD tuning cheat sheet: [`docs/tuning-amd-igpu.md`](docs/tuning-amd-igpu.md)
 - Architectural decisions: [`docs/decisions.yaml`](docs/decisions.yaml)
-- API docs: generated with Doxygen 1.12+ once the target lands in CMake
+- API docs: generated with Doxygen 1.15+ once the target lands in CMake
 
 ## License
 

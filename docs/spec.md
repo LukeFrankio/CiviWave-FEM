@@ -19,7 +19,7 @@ changes.
 ## Key Requirements
 
 1. **Toolchain:** GCC 15.2 or newer with `-std=c++2c`, CMake 4.1.2, Vulkan SDK
-  1.4.328.1, Slang 2025.18, and Doxygen 1.12+ for documentation builds. Prefer
+  1.4.328.1, Slang 2025.18, and Doxygen 1.15+ for documentation builds. Prefer
   latest beta releases when available.
 2. **Runtime Features:** shaderFloat64, descriptor indexing with
    `VK_EXT_descriptor_buffer`, buffer device address, timeline semaphores, and

@@ -14,7 +14,7 @@ Expectations for kindness, respect, and zero tolerance for harassment live in
 1. Fork the repo and branch from `dev`. Name branches like
    `feature/predictor-kernel` or `bugfix/vulkan-sync` so everyone knows the vibe.
 2. Install the toolchain: GCC 15.2+, CMake 4.1.2+, Vulkan SDK 1.4.328.1+,
-   Doxygen 1.12+, and Python 3.11+ for scripts. Prefer latest betas when
+   Doxygen 1.15+, and Python 3.11+ for scripts. Prefer latest betas when
    available.
 3. Configure with CMake presets:
    - `cmake --preset debug` for assertions and validation layers
