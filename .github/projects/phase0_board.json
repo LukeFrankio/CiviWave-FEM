@@ -1,0 +1,27 @@
+{
+  "name": "CiviWave-FEM Project Board",
+  "description": "Phase-based board for CiviWave-FEM (Backlog, In Progress, Review, Done)",
+  "columns": [
+    "Backlog",
+    "In Progress",
+    "Review",
+    "Done"
+  ],
+  "milestones": [
+    { "title": "M1", "description": "Initial scaffolding and Phase 0 completion" },
+    { "title": "M2", "description": "Toolchain + CMake" },
+    { "title": "M3", "description": "CPU reference solver and tests" },
+    { "title": "M4", "description": "Vulkan integration + Slang kernels" },
+    { "title": "M5", "description": "Optimization and AMD tuning" },
+    { "title": "M6", "description": "Release and docs" }
+  ],
+  "sample_cards": {
+    "Backlog": [
+      { "title": "Add AGPL license", "note": "Complete licensing" },
+      { "title": "Create README and CONTRIBUTING", "note": "Documentation scaffolding" }
+    ],
+    "In Progress": [],
+    "Review": [],
+    "Done": []
+  }
+}
