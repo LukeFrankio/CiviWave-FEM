@@ -10,7 +10,7 @@ jobs:
   ubuntu-build:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install GCC 15 and Ninja
         run: |
           sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
@@ -54,7 +54,7 @@ jobs:
   windows-build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Set up MSYS2 with MinGW-w64 (UCRT)
         uses: msys2/setup-msys2@v2
         with:
