@@ -28,7 +28,7 @@ stresses without leaving the comfort of GCC 15.2.
 | GCC             | 15.2    | 15.2+     | Invoke with `-std=c++2c` (a.k.a. C++26 uwu) |
 | CMake           | 4.1.2   | 4.1.2+    | Presets cover Debug/Release/Profile vibes   |
 | Vulkan SDK      | 1.4.328 | 1.4.328+  | Feature gating keeps 1.3 hardware happy    |
-| Slang           | 2025.18 | 2025.18+  | slangc builds as part of the configure step |
+| Slang           | 2025.18 | 2025.18+  | prefer prebuilt `slangc` (provide via PATH or `SLANGC`). Building Slang from source is opt-in and disabled by default |
 | yaml-cpp        | 0.8.0   | 0.8.0+    | Pulled via FetchContent unless ABI matched  |
 | Vulkan Memory Allocator | 3.3.0 | 3.3.0+ | Header-only goodness, still pinned though |
 | Doxygen         | 1.15    | 1.15+     | Generates the documentation drip (CI runs it) |
@@ -39,7 +39,7 @@ stresses without leaving the comfort of GCC 15.2.
 - `RefDocs/` — the long-form spec, plan, and TODO guidance
 - `cmake/` — custom modules for toolchain probing and shader compilation (TBD)
 - `src/` — core application code (matrix-free solver, Vulkan backend)
-- `shaders/` — Slang modules compiled to SPIR-V at build time
+- `shaders/` — Slang modules compiled to SPIR-V at build time if a prebuilt `slangc` is available. If `slangc` is not provided, the build will emit stub SPIR-V files so the project can still build without full shader compilation
 - `tests/` — Google Test-powered regression and validation harnesses
 - `assets/` — canonical meshes, YAML scenarios, and validation snapshots
 

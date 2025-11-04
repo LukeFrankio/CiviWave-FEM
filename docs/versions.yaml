@@ -29,7 +29,7 @@ versions:
   slang:
     preferred: 2025.18
     minimum: 2025.10
-    notes: "Build slangc and runtime from source via FetchContent."
+    notes: "Prefer a prebuilt 'slangc' on PATH or set SLANGC env var. Building Slang from source is platform-heavy and not performed by default."
   vma:
     preferred: 3.3.0
     minimum: 3.2.0

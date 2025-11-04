@@ -35,7 +35,7 @@ If any check fails, we build from source via `FetchContent`.
 
 ## Libraries and expectations
 
-- Slang: build `slangc` and runtime from source at the pinned tag.
+- Slang: prefer using a prebuilt `slangc` binary (install it or set SLANGC env var). Building Slang from source is possible but not performed by default due to platform-specific dependencies and submodule complexity.
 - VMA: header-only; include at the pinned version.
 - `yaml-cpp`: static library; tests off; exceptions per project policy.
 

@@ -1,0 +1,73 @@
+name: CI (Build)
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
+
+jobs:
+  ubuntu-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GCC 15 and Ninja
+        run: |
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install -y gcc-15 g++-15 ninja-build python3-pip
+      - name: Install formatting & linting tools
+        run: |
+          sudo apt-get install -y clang-format clang-tidy clang
+      - name: Install CMake 4.1.2+
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install --upgrade cmake
+          cmake --version
+      - name: Configure
+        env:
+          CC: gcc-15
+          CXX: g++-15
+        run: |
+          cmake -S . -B build -G Ninja -DFORCE_FETCH_DEPS=ON -DENABLE_VALIDATION=ON
+      - name: Build (Release)
+        run: |
+          cmake --build build --config Release -- -k 0
+      - name: Run tests
+        run: |
+          ctest --test-dir build --output-on-failure -C Release
+      - name: Format check
+        run: |
+          # Fail if any file would change under clang-format -style=file
+          files=$(git ls-files '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp')
+          for f in $files; do
+            clang-format -style=file "$f" | diff -u "$f" - || (echo "Formatting issues in $f"; exit 1)
+          done
+      - name: Run clang-tidy
+        run: |
+          if [ -f build/compile_commands.json ]; then
+            find src -name '*.cpp' -o -name '*.c' -o -name '*.cc' | xargs -r clang-tidy -p build || true
+          else
+            echo "No compile_commands.json found; skipping clang-tidy"
+          fi
+
+  windows-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up MSYS2 with MinGW-w64 (UCRT)
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-cmake
+      - name: Configure (MinGW)
+        shell: msys2 {0}
+        run: |
+          cmake -S . -B build -G Ninja -DFORCE_FETCH_DEPS=ON -DENABLE_VALIDATION=ON
+      - name: Build (Release)
+        shell: msys2 {0}
+        run: |
+          cmake --build build --config Release -- -k 0
