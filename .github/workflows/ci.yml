@@ -11,11 +11,28 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
-      - name: Install GCC 15 and Ninja
+      - name: Install GCC toolchain and Ninja
         run: |
           sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-          sudo apt update
-          sudo apt install -y gcc-15 g++-15 ninja-build python3-pip
+          sudo apt-get update
+          # Try to install GCC 15 first; fall back if unavailable on the runner
+          if sudo apt-get install -y gcc-15 g++-15; then
+            echo "CC=gcc-15" | tee -a "$GITHUB_ENV"
+            echo "CXX=g++-15" | tee -a "$GITHUB_ENV"
+          else
+            echo "GCC 15 not available on this runner, attempting GCC 14"
+            if sudo apt-get install -y gcc-14 g++-14; then
+              echo "CC=gcc-14" | tee -a "$GITHUB_ENV"
+              echo "CXX=g++-14" | tee -a "$GITHUB_ENV"
+            elif sudo apt-get install -y gcc-13 g++-13; then
+              echo "CC=gcc-13" | tee -a "$GITHUB_ENV"
+              echo "CXX=g++-13" | tee -a "$GITHUB_ENV"
+            else
+              echo "Failed to install GCC toolchain" >&2
+              exit 1
+            fi
+          fi
+          sudo apt-get install -y ninja-build python3-pip
       - name: Install formatting & linting tools
         run: |
           sudo apt-get install -y clang-format clang-tidy clang
@@ -25,9 +42,6 @@ jobs:
           python3 -m pip install --upgrade cmake
           cmake --version
       - name: Configure
-        env:
-          CC: gcc-15
-          CXX: g++-15
         run: |
           cmake -S . -B build -G Ninja -DFORCE_FETCH_DEPS=ON -DENABLE_VALIDATION=ON
       - name: Build (Release)
@@ -63,6 +77,8 @@ jobs:
             mingw-w64-ucrt-x86_64-gcc
             mingw-w64-ucrt-x86_64-ninja
             mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-clang
+            mingw-w64-ucrt-x86_64-clang-tools-extra
       - name: Configure (MinGW)
         shell: msys2 {0}
         run: |
@@ -71,3 +87,22 @@ jobs:
         shell: msys2 {0}
         run: |
           cmake --build build --config Release -- -k 0
+      - name: Run tests (MinGW)
+        shell: msys2 {0}
+        run: |
+          ctest --test-dir build --output-on-failure -C Release
+      - name: Format check (MinGW)
+        shell: msys2 {0}
+        run: |
+          files=$(git ls-files '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp')
+          for f in $files; do
+            clang-format -style=file "$f" | diff -u "$f" - || { echo "Formatting issues in $f"; exit 1; }
+          done
+      - name: Run clang-tidy (MinGW)
+        shell: msys2 {0}
+        run: |
+          if [ -f build/compile_commands.json ]; then
+            find src -name '*.cpp' -o -name '*.c' -o -name '*.cc' | xargs -r clang-tidy -p build || true
+          else
+            echo "No compile_commands.json found; skipping clang-tidy"
+          fi

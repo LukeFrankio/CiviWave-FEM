@@ -27,11 +27,6 @@ if(CLANG_FORMAT_EXE)
 endif()
 
 if(CLANG_TIDY_EXE)
-    # Tidy requires compile commands; assume build tree exports them
-    if(NOT EXISTS "${CMAKE_BINARY_DIR}/compile_commands.json")
-        message(STATUS "clang-tidy available but compile_commands.json not found; enable CMAKE_EXPORT_COMPILE_COMMANDS in your build to use tidy target.")
-    endif()
-
     # Collect C/C++ source files to run tidy on (same patterns as formatting)
     file(GLOB_RECURSE CW_TIDY_SOURCES
         "${CMAKE_SOURCE_DIR}/*.c"
