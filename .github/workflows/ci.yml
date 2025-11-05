@@ -84,7 +84,13 @@ jobs:
           # Ensure a cmake command is available in the runner environment. Try Chocolatey if not present.
           if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
             Write-Output "cmake not found on PATH; attempting to install via Chocolatey"
-            choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' -y || Write-Output "Chocolatey cmake install failed; continuing"
+            # Try installing via Chocolatey; capture the exit code and continue if it fails
+            & choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' -y
+            if ($LASTEXITCODE -ne 0) {
+              Write-Output "Chocolatey cmake install failed (exit code $LASTEXITCODE); continuing without cmake."
+            } else {
+              Write-Output "Chocolatey cmake installed successfully"
+            }
           } else {
             Write-Output "cmake already available"
           }
