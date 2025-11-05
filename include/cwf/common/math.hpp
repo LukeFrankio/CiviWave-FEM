@@ -41,7 +41,8 @@
 #include <limits>
 #include <numbers>
 
-namespace cwf::common {
+namespace cwf::common
+{
 
 /**
  * @brief spicy 3D vector alias that keeps STL friendly vibes
@@ -85,7 +86,7 @@ using Vec3 = std::array<double, 3>;
  * // result == 0.0 even with infinities because zero annihilates everything uwu
  * @endcode
  */
-[[nodiscard]] constexpr auto dot(const Vec3& lhs, const Vec3& rhs) noexcept -> double
+[[nodiscard]] constexpr auto dot(const Vec3 &lhs, const Vec3 &rhs) noexcept -> double
 {
     return (lhs[0] * rhs[0]) + (lhs[1] * rhs[1]) + (lhs[2] * rhs[2]);
 }
@@ -120,13 +121,10 @@ using Vec3 = std::array<double, 3>;
  * // triple == 1.0 because standard basis is orthonormal uwu
  * @endcode
  */
-[[nodiscard]] constexpr auto cross(const Vec3& lhs, const Vec3& rhs) noexcept -> Vec3
+[[nodiscard]] constexpr auto cross(const Vec3 &lhs, const Vec3 &rhs) noexcept -> Vec3
 {
-    return Vec3{
-        (lhs[1] * rhs[2]) - (lhs[2] * rhs[1]),
-        (lhs[2] * rhs[0]) - (lhs[0] * rhs[2]),
-        (lhs[0] * rhs[1]) - (lhs[1] * rhs[0])
-    };
+    return Vec3{(lhs[1] * rhs[2]) - (lhs[2] * rhs[1]), (lhs[2] * rhs[0]) - (lhs[0] * rhs[2]),
+                (lhs[0] * rhs[1]) - (lhs[1] * rhs[0])};
 }
 
 /**
@@ -151,10 +149,11 @@ using Vec3 = std::array<double, 3>;
  * @note leverages std::hypot for precision and overflow resilience
  * @warning NaN inputs propagate per IEEE 754 (callers should guard if needed)
  */
-[[nodiscard]] inline auto magnitude(const Vec3& value) noexcept -> double
+[[nodiscard]] inline auto magnitude(const Vec3 &value) noexcept -> double
 {
     const auto hypot = std::hypot(value[0], value[1], value[2]);
-    if (hypot < std::numeric_limits<double>::denorm_min()) {
+    if (hypot < std::numeric_limits<double>::denorm_min())
+    {
         return 0.0;
     }
     return hypot;
@@ -179,15 +178,16 @@ using Vec3 = std::array<double, 3>;
  * @note threshold tuned to 1e-12 to balance precision vs stability
  * @note safe for zero vectors (returns zero vector gracefully)
  */
-[[nodiscard]] inline auto safe_normalize(const Vec3& value) noexcept -> Vec3
+[[nodiscard]] inline auto safe_normalize(const Vec3 &value) noexcept -> Vec3
 {
     constexpr double kThreshold = 1.0e-12;
-    const auto mag = magnitude(value);
-    if (mag < kThreshold || !std::isfinite(mag)) {
+    const auto       mag        = magnitude(value);
+    if (mag < kThreshold || !std::isfinite(mag))
+    {
         return Vec3{0.0, 0.0, 0.0};
     }
     const auto inv = 1.0 / mag;
     return Vec3{value[0] * inv, value[1] * inv, value[2] * inv};
 }
 
-}  // namespace cwf::common
+} // namespace cwf::common

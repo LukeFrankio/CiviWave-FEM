@@ -25,7 +25,7 @@ jobs:
             wget https://apt.llvm.org/llvm.sh
             chmod +x llvm.sh
             sudo ./llvm.sh 19
-            sudo apt-get install -y clang-19 lld-19 libc++-19-dev libc++abi-19-dev
+            sudo apt-get install -y clang-19 clang-tools-19 lld-19 libc++-19-dev libc++abi-19-dev
             rm -f llvm.sh
             echo "CC=clang-19" | tee -a "$GITHUB_ENV"
             echo "CXX=clang++-19" | tee -a "$GITHUB_ENV"
