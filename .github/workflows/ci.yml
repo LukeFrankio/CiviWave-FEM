@@ -149,8 +149,8 @@ jobs:
                 echo "CXX=clang++"
                 echo "USE_LIBCXX=ON"
                 echo "CXXFLAGS=-stdlib=libc++"
-                printf 'LDFLAGS=%s
-' "$extra_ldflags"
+                # Use echo to avoid embedding literal newlines which can break YAML parsing
+                echo "LDFLAGS=$extra_ldflags"
               } >> "$github_env_path"
             else
               echo "Now using GCC $ver (>=15.2)"
