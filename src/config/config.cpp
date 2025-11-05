@@ -13,37 +13,40 @@
 #include <cmath>
 #include <format>
 #include <stdexcept>
-
 #include <yaml-cpp/yaml.h>
 
-namespace cwf::config {
-namespace {
+namespace cwf::config
+{
+namespace
+{
 
-[[nodiscard]] auto make_error(std::string message, std::vector<std::string> ctx)
-    -> ConfigResult
+[[nodiscard]] auto make_error(std::string message, std::vector<std::string> ctx) -> ConfigResult
 {
     return std::unexpected(ConfigError{std::move(message), std::move(ctx)});
 }
 
-[[nodiscard]] auto make_scalar_error(const std::string& expectation,
-                                     std::vector<std::string> ctx) -> ConfigResult
+[[nodiscard]] auto make_scalar_error(const std::string &expectation, std::vector<std::string> ctx)
+    -> ConfigResult
 {
     return make_error(expectation, std::move(ctx));
 }
 
-[[nodiscard]] auto node_to_vec3(const YAML::Node& node,
-                                std::vector<std::string> ctx)
+[[nodiscard]] auto node_to_vec3(const YAML::Node &node, std::vector<std::string> ctx)
     -> std::expected<std::array<double, 3>, ConfigError>
 {
-    if (!node || !node.IsSequence() || node.size() != 3U) {
-        return std::unexpected(ConfigError{
-            "expected sequence[3] for vector", std::move(ctx)});
+    if (!node || !node.IsSequence() || node.size() != 3U)
+    {
+        return std::unexpected(ConfigError{"expected sequence[3] for vector", std::move(ctx)});
     }
     std::array<double, 3> values{};
-    for (std::size_t i = 0; i < 3; ++i) {
-        try {
+    for (std::size_t i = 0; i < 3; ++i)
+    {
+        try
+        {
             values[i] = node[i].as<double>();
-        } catch (const YAML::Exception& ex) {
+        }
+        catch (const YAML::Exception &ex)
+        {
             auto child_ctx = ctx;
             child_ctx.emplace_back(std::format("[{}]", i));
             return std::unexpected(ConfigError{ex.what(), std::move(child_ctx)});
@@ -52,26 +55,31 @@ namespace {
     return values;
 }
 
-[[nodiscard]] auto node_to_optional_vec3(const YAML::Node& node,
-                                         std::vector<std::string> ctx)
+[[nodiscard]] auto node_to_optional_vec3(const YAML::Node &node, std::vector<std::string> ctx)
     -> std::expected<std::array<std::optional<double>, 3>, ConfigError>
 {
     std::array<std::optional<double>, 3> result{};
-    if (!node || node.IsNull()) {
+    if (!node || node.IsNull())
+    {
         return result;
     }
-    if (!node.IsSequence() || node.size() != 3U) {
-        return std::unexpected(ConfigError{
-            "expected sequence[3] for value override", std::move(ctx)});
+    if (!node.IsSequence() || node.size() != 3U)
+    {
+        return std::unexpected(ConfigError{"expected sequence[3] for value override", std::move(ctx)});
     }
-    for (std::size_t i = 0; i < 3; ++i) {
-        if (node[i].IsNull()) {
+    for (std::size_t i = 0; i < 3; ++i)
+    {
+        if (node[i].IsNull())
+        {
             result[i] = std::nullopt;
             continue;
         }
-        try {
+        try
+        {
             result[i] = node[i].as<double>();
-        } catch (const YAML::Exception& ex) {
+        }
+        catch (const YAML::Exception &ex)
+        {
             auto child_ctx = ctx;
             child_ctx.emplace_back(std::format("[{}]", i));
             return std::unexpected(ConfigError{ex.what(), std::move(child_ctx)});
@@ -80,20 +88,23 @@ namespace {
     return result;
 }
 
-[[nodiscard]] auto node_to_string_vec(const YAML::Node& node,
-                                      std::vector<std::string> ctx)
+[[nodiscard]] auto node_to_string_vec(const YAML::Node &node, std::vector<std::string> ctx)
     -> std::expected<std::vector<std::string>, ConfigError>
 {
-    if (!node || !node.IsSequence()) {
-        return std::unexpected(ConfigError{
-            "expected sequence for string list", std::move(ctx)});
+    if (!node || !node.IsSequence())
+    {
+        return std::unexpected(ConfigError{"expected sequence for string list", std::move(ctx)});
     }
     std::vector<std::string> items;
     items.reserve(node.size());
-    for (std::size_t i = 0; i < node.size(); ++i) {
-        try {
+    for (std::size_t i = 0; i < node.size(); ++i)
+    {
+        try
+        {
             items.emplace_back(node[i].as<std::string>());
-        } catch (const YAML::Exception& ex) {
+        }
+        catch (const YAML::Exception &ex)
+        {
             auto child_ctx = ctx;
             child_ctx.emplace_back(std::format("[{}]", i));
             return std::unexpected(ConfigError{ex.what(), std::move(child_ctx)});
@@ -102,35 +113,42 @@ namespace {
     return items;
 }
 
-}  // namespace
+} // namespace
 
-auto load_config_from_file(const std::filesystem::path& path) -> ConfigResult
+auto load_config_from_file(const std::filesystem::path &path) -> ConfigResult
 {
-    try {
+    try
+    {
         const auto node = YAML::LoadFile(path.string());
         return parse_config_node(node);
-    } catch (const YAML::BadFile& ex) {
-        return make_error(std::format("unable to open config file: {}", ex.what()),
-                          {path.string()});
-    } catch (const YAML::Exception& ex) {
-        return make_error(std::format("YAML parse error: {}", ex.what()),
-                          {path.string()});
+    }
+    catch (const YAML::BadFile &ex)
+    {
+        return make_error(std::format("unable to open config file: {}", ex.what()), {path.string()});
+    }
+    catch (const YAML::Exception &ex)
+    {
+        return make_error(std::format("YAML parse error: {}", ex.what()), {path.string()});
     }
 }
 
 auto load_config_from_string(std::string_view yaml_text) -> ConfigResult
 {
-    try {
+    try
+    {
         const auto node = YAML::Load(yaml_text.data());
         return parse_config_node(node);
-    } catch (const YAML::Exception& ex) {
+    }
+    catch (const YAML::Exception &ex)
+    {
         return make_error(std::format("YAML parse error: {}", ex.what()), {});
     }
 }
 
-auto parse_config_node(const YAML::Node& root) -> ConfigResult
+auto parse_config_node(const YAML::Node &root) -> ConfigResult
 {
-    if (!root || !root.IsMap()) {
+    if (!root || !root.IsMap())
+    {
         return make_error("config root must be a mapping", {});
     }
 
@@ -138,53 +156,61 @@ auto parse_config_node(const YAML::Node& root) -> ConfigResult
 
     // mesh
     const auto mesh_node = root["mesh"];
-    if (!mesh_node || !mesh_node.IsMap()) {
+    if (!mesh_node || !mesh_node.IsMap())
+    {
         return make_error("missing 'mesh' section", {"mesh"});
     }
     const auto mesh_path_node = mesh_node["path"];
-    if (!mesh_path_node || !mesh_path_node.IsScalar()) {
+    if (!mesh_path_node || !mesh_path_node.IsScalar())
+    {
         return make_scalar_error("mesh.path must be a scalar string", {"mesh", "path"});
     }
     cfg.mesh_path = std::filesystem::path(mesh_path_node.as<std::string>());
 
     // materials
     const auto materials_node = root["materials"];
-    if (!materials_node || !materials_node.IsSequence() || materials_node.size() == 0U) {
+    if (!materials_node || !materials_node.IsSequence() || materials_node.size() == 0U)
+    {
         return make_error("materials must be a non-empty sequence", {"materials"});
     }
     cfg.materials.reserve(materials_node.size());
     std::unordered_map<std::string, std::size_t> material_index;
-    for (std::size_t i = 0; i < materials_node.size(); ++i) {
+    for (std::size_t i = 0; i < materials_node.size(); ++i)
+    {
         const auto node = materials_node[i];
-        if (!node.IsMap()) {
-            return make_error("material entry must be a map",
-                               {"materials", std::format("[{}]", i)});
+        if (!node.IsMap())
+        {
+            return make_error("material entry must be a map", {"materials", std::format("[{}]", i)});
         }
         Material mat{};
-        try {
-            mat.name = node["name"].as<std::string>();
+        try
+        {
+            mat.name           = node["name"].as<std::string>();
             mat.youngs_modulus = node["E"].as<double>();
-            mat.poisson_ratio = node["nu"].as<double>();
-            mat.density = node["rho"].as<double>();
-        } catch (const YAML::Exception& ex) {
+            mat.poisson_ratio  = node["nu"].as<double>();
+            mat.density        = node["rho"].as<double>();
+        }
+        catch (const YAML::Exception &ex)
+        {
             return make_error(ex.what(), {"materials", std::format("[{}]", i)});
         }
 
-        if (mat.youngs_modulus <= 0.0) {
-            return make_error("material.E must be > 0",
-                               {"materials", std::format("[{}]", i), "E"});
+        if (mat.youngs_modulus <= 0.0)
+        {
+            return make_error("material.E must be > 0", {"materials", std::format("[{}]", i), "E"});
         }
-        if (mat.poisson_ratio <= -0.999 || mat.poisson_ratio >= 0.5) {
+        if (mat.poisson_ratio <= -0.999 || mat.poisson_ratio >= 0.5)
+        {
             return make_error("material.nu must be (-0.999, 0.5)",
-                               {"materials", std::format("[{}]", i), "nu"});
+                              {"materials", std::format("[{}]", i), "nu"});
         }
-        if (mat.density <= 0.0) {
-            return make_error("material.rho must be > 0",
-                               {"materials", std::format("[{}]", i), "rho"});
+        if (mat.density <= 0.0)
+        {
+            return make_error("material.rho must be > 0", {"materials", std::format("[{}]", i), "rho"});
         }
-        if (material_index.contains(mat.name)) {
-            return make_error("material names must be unique",
-                               {"materials", std::format("[{}]", i), "name"});
+        if (material_index.contains(mat.name))
+        {
+            return make_error("material names must be unique", {"materials", std::format("[{}]", i), "name"});
         }
         material_index[mat.name] = cfg.materials.size();
         cfg.materials.push_back(std::move(mat));
@@ -192,139 +218,177 @@ auto parse_config_node(const YAML::Node& root) -> ConfigResult
 
     // assignments
     const auto assignments_node = root["assignments"];
-    if (!assignments_node || !assignments_node.IsSequence() || assignments_node.size() == 0U) {
+    if (!assignments_node || !assignments_node.IsSequence() || assignments_node.size() == 0U)
+    {
         return make_error("assignments must be a non-empty sequence", {"assignments"});
     }
     cfg.assignments.reserve(assignments_node.size());
-    for (std::size_t i = 0; i < assignments_node.size(); ++i) {
+    for (std::size_t i = 0; i < assignments_node.size(); ++i)
+    {
         const auto node = assignments_node[i];
-        if (!node.IsMap()) {
-            return make_error("assignment must be a map",
-                               {"assignments", std::format("[{}]", i)});
+        if (!node.IsMap())
+        {
+            return make_error("assignment must be a map", {"assignments", std::format("[{}]", i)});
         }
         Assignment a{};
-        try {
-            a.group = node["group"].as<std::string>();
+        try
+        {
+            a.group    = node["group"].as<std::string>();
             a.material = node["material"].as<std::string>();
-        } catch (const YAML::Exception& ex) {
+        }
+        catch (const YAML::Exception &ex)
+        {
             return make_error(ex.what(), {"assignments", std::format("[{}]", i)});
         }
-        if (!material_index.contains(a.material)) {
+        if (!material_index.contains(a.material))
+        {
             return make_error("assignment references unknown material",
-                               {"assignments", std::format("[{}]", i), "material"});
+                              {"assignments", std::format("[{}]", i), "material"});
         }
         cfg.assignments.push_back(std::move(a));
     }
 
     // damping
     const auto damping_node = root["damping"];
-    if (!damping_node || !damping_node.IsMap()) {
+    if (!damping_node || !damping_node.IsMap())
+    {
         return make_error("missing damping map", {"damping"});
     }
-    try {
+    try
+    {
         cfg.damping.xi = damping_node["xi"].as<double>();
         cfg.damping.w1 = damping_node["w1"].as<double>();
         cfg.damping.w2 = damping_node["w2"].as<double>();
-    } catch (const YAML::Exception& ex) {
+    }
+    catch (const YAML::Exception &ex)
+    {
         return make_error(ex.what(), {"damping"});
     }
-    if (cfg.damping.xi <= 0.0 || cfg.damping.xi >= 1.0) {
+    if (cfg.damping.xi <= 0.0 || cfg.damping.xi >= 1.0)
+    {
         return make_error("damping.xi must be (0,1)", {"damping", "xi"});
     }
-    if (cfg.damping.w1 <= 0.0) {
+    if (cfg.damping.w1 <= 0.0)
+    {
         return make_error("damping.w1 must be > 0", {"damping", "w1"});
     }
-    if (cfg.damping.w2 <= cfg.damping.w1) {
+    if (cfg.damping.w2 <= cfg.damping.w1)
+    {
         return make_error("damping.w2 must be > damping.w1", {"damping", "w2"});
     }
 
     // time
     const auto time_node = root["time"];
-    if (!time_node || !time_node.IsMap()) {
+    if (!time_node || !time_node.IsMap())
+    {
         return make_error("missing time map", {"time"});
     }
-    try {
+    try
+    {
         cfg.time.initial_dt = time_node["dt"].as<double>();
-        cfg.time.adaptive = time_node["adaptive"].as<bool>();
-    } catch (const YAML::Exception& ex) {
+        cfg.time.adaptive   = time_node["adaptive"].as<bool>();
+    }
+    catch (const YAML::Exception &ex)
+    {
         return make_error(ex.what(), {"time"});
     }
     cfg.time.min_dt = time_node["min_dt"].IsDefined() ? time_node["min_dt"].as<double>() : 0.0;
-    cfg.time.max_dt = time_node["max_dt"].IsDefined() ? time_node["max_dt"].as<double>() : cfg.time.initial_dt;
-    if (cfg.time.initial_dt <= 0.0) {
+    cfg.time.max_dt =
+        time_node["max_dt"].IsDefined() ? time_node["max_dt"].as<double>() : cfg.time.initial_dt;
+    if (cfg.time.initial_dt <= 0.0)
+    {
         return make_error("time.dt must be > 0", {"time", "dt"});
     }
-    if (cfg.time.min_dt < 0.0) {
+    if (cfg.time.min_dt < 0.0)
+    {
         return make_error("time.min_dt must be >= 0", {"time", "min_dt"});
     }
-    if (cfg.time.max_dt < cfg.time.initial_dt) {
+    if (cfg.time.max_dt < cfg.time.initial_dt)
+    {
         return make_error("time.max_dt must be >= time.dt", {"time", "max_dt"});
     }
 
     // solver
     const auto solver_node = root["solver"];
-    if (!solver_node || !solver_node.IsMap()) {
+    if (!solver_node || !solver_node.IsMap())
+    {
         return make_error("missing solver map", {"solver"});
     }
-    try {
-        cfg.solver.type = solver_node["type"].as<std::string>();
-        cfg.solver.preconditioner = solver_node["preconditioner"].as<std::string>();
+    try
+    {
+        cfg.solver.type              = solver_node["type"].as<std::string>();
+        cfg.solver.preconditioner    = solver_node["preconditioner"].as<std::string>();
         cfg.solver.runtime_tolerance = solver_node["tol_runtime"].as<double>();
-        cfg.solver.pause_tolerance = solver_node["tol_pause"].as<double>();
-        cfg.solver.max_iterations = solver_node["max_iters"].as<std::uint32_t>();
-    } catch (const YAML::Exception& ex) {
+        cfg.solver.pause_tolerance   = solver_node["tol_pause"].as<double>();
+        cfg.solver.max_iterations    = solver_node["max_iters"].as<std::uint32_t>();
+    }
+    catch (const YAML::Exception &ex)
+    {
         return make_error(ex.what(), {"solver"});
     }
-    if (cfg.solver.max_iterations == 0U) {
+    if (cfg.solver.max_iterations == 0U)
+    {
         return make_error("solver.max_iters must be >= 1", {"solver", "max_iters"});
     }
-    if (cfg.solver.runtime_tolerance <= 0.0 || cfg.solver.pause_tolerance <= 0.0) {
+    if (cfg.solver.runtime_tolerance <= 0.0 || cfg.solver.pause_tolerance <= 0.0)
+    {
         return make_error("solver tolerances must be > 0", {"solver"});
     }
 
     // precision
     const auto precision_node = root["precision"];
-    if (!precision_node || !precision_node.IsMap()) {
+    if (!precision_node || !precision_node.IsMap())
+    {
         return make_error("missing precision map", {"precision"});
     }
-    try {
-        cfg.precision.vector_precision = precision_node["vectors"].as<std::string>();
+    try
+    {
+        cfg.precision.vector_precision    = precision_node["vectors"].as<std::string>();
         cfg.precision.reduction_precision = precision_node["reductions"].as<std::string>();
-    } catch (const YAML::Exception& ex) {
+    }
+    catch (const YAML::Exception &ex)
+    {
         return make_error(ex.what(), {"precision"});
     }
 
     // curves (optional map)
     const auto curves_node = root["curves"];
-    if (curves_node && curves_node.IsMap()) {
-        for (const auto& item : curves_node) {
+    if (curves_node && curves_node.IsMap())
+    {
+        for (const auto &item : curves_node)
+        {
             const auto key = item.first.as<std::string>();
             const auto seq = item.second;
-            if (!seq.IsSequence() || seq.size() == 0U) {
-                return make_error("curve must be non-empty sequence",
-                                   {"curves", key});
+            if (!seq.IsSequence() || seq.size() == 0U)
+            {
+                return make_error("curve must be non-empty sequence", {"curves", key});
             }
             Curve curve{};
             curve.points.reserve(seq.size());
             double previous_time = -std::numeric_limits<double>::infinity();
-            for (std::size_t idx = 0; idx < seq.size(); ++idx) {
+            for (std::size_t idx = 0; idx < seq.size(); ++idx)
+            {
                 const auto pair_node = seq[idx];
-                if (!pair_node.IsSequence() || pair_node.size() != 2U) {
+                if (!pair_node.IsSequence() || pair_node.size() != 2U)
+                {
                     return make_error("curve point must be sequence[2]",
-                                       {"curves", key, std::format("[{}]", idx)});
+                                      {"curves", key, std::format("[{}]", idx)});
                 }
                 double t{};
                 double v{};
-                try {
+                try
+                {
                     t = pair_node[0].as<double>();
                     v = pair_node[1].as<double>();
-                } catch (const YAML::Exception& ex) {
-                    return make_error(ex.what(),
-                                       {"curves", key, std::format("[{}]", idx)});
                 }
-                if (t < previous_time) {
+                catch (const YAML::Exception &ex)
+                {
+                    return make_error(ex.what(), {"curves", key, std::format("[{}]", idx)});
+                }
+                if (t < previous_time)
+                {
                     return make_error("curve times must be non-decreasing",
-                                       {"curves", key, std::format("[{}]", idx)});
+                                      {"curves", key, std::format("[{}]", idx)});
                 }
                 previous_time = t;
                 curve.points.emplace_back(t, v);
@@ -335,44 +399,52 @@ auto parse_config_node(const YAML::Node& root) -> ConfigResult
 
     // loads
     const auto loads_node = root["loads"];
-    if (!loads_node || !loads_node.IsMap()) {
+    if (!loads_node || !loads_node.IsMap())
+    {
         return make_error("missing loads map", {"loads"});
     }
     {
         auto gravity_result = node_to_vec3(loads_node["gravity"], {"loads", "gravity"});
-        if (!gravity_result) {
+        if (!gravity_result)
+        {
             return std::unexpected(gravity_result.error());
         }
         cfg.loads.gravity = gravity_result.value();
     }
     const auto tractions_node = loads_node["tractions"];
-    if (tractions_node && tractions_node.IsSequence()) {
+    if (tractions_node && tractions_node.IsSequence())
+    {
         cfg.loads.tractions.reserve(tractions_node.size());
-        for (std::size_t i = 0; i < tractions_node.size(); ++i) {
+        for (std::size_t i = 0; i < tractions_node.size(); ++i)
+        {
             const auto entry = tractions_node[i];
-            if (!entry.IsMap()) {
+            if (!entry.IsMap())
+            {
                 return make_error("traction entry must be map",
-                                   {"loads", "tractions", std::format("[{}]", i)});
+                                  {"loads", "tractions", std::format("[{}]", i)});
             }
             SurfaceTraction traction{};
-            try {
+            try
+            {
                 traction.group = entry["group"].as<std::string>();
-                traction.scale_curve = entry["scale_curve"].IsDefined()
-                    ? entry["scale_curve"].as<std::string>()
-                    : std::string{};
-            } catch (const YAML::Exception& ex) {
-                return make_error(ex.what(),
-                                   {"loads", "tractions", std::format("[{}]", i)});
+                traction.scale_curve =
+                    entry["scale_curve"].IsDefined() ? entry["scale_curve"].as<std::string>() : std::string{};
             }
-            auto val_result = node_to_vec3(entry["value"],
-                                           {"loads", "tractions", std::format("[{}]", i), "value"});
-            if (!val_result) {
+            catch (const YAML::Exception &ex)
+            {
+                return make_error(ex.what(), {"loads", "tractions", std::format("[{}]", i)});
+            }
+            auto val_result =
+                node_to_vec3(entry["value"], {"loads", "tractions", std::format("[{}]", i), "value"});
+            if (!val_result)
+            {
                 return std::unexpected(val_result.error());
             }
             traction.value = val_result.value();
-            if (!traction.scale_curve.empty() && !cfg.curves.contains(traction.scale_curve)) {
+            if (!traction.scale_curve.empty() && !cfg.curves.contains(traction.scale_curve))
+            {
                 return make_error("traction references unknown curve",
-                                   {"loads", "tractions", std::format("[{}]", i), "scale_curve"});
+                                  {"loads", "tractions", std::format("[{}]", i), "scale_curve"});
             }
             cfg.loads.tractions.push_back(std::move(traction));
         }
@@ -380,48 +452,65 @@ auto parse_config_node(const YAML::Node& root) -> ConfigResult
 
     // dirichlet
     const auto dirichlet_node = root["dirichlet"];
-    if (dirichlet_node && dirichlet_node.IsMap()) {
+    if (dirichlet_node && dirichlet_node.IsMap())
+    {
         const auto fixes_node = dirichlet_node["fixes"];
-        if (fixes_node && fixes_node.IsSequence()) {
+        if (fixes_node && fixes_node.IsSequence())
+        {
             cfg.dirichlet.reserve(fixes_node.size());
-            for (std::size_t i = 0; i < fixes_node.size(); ++i) {
+            for (std::size_t i = 0; i < fixes_node.size(); ++i)
+            {
                 const auto entry = fixes_node[i];
-                if (!entry.IsMap()) {
+                if (!entry.IsMap())
+                {
                     return make_error("dirichlet fixed entry must be a map",
-                                       {"dirichlet", "fixes", std::format("[{}]", i)});
+                                      {"dirichlet", "fixes", std::format("[{}]", i)});
                 }
                 DirichletFix fix{};
-                try {
+                try
+                {
                     fix.group = entry["group"].as<std::string>();
-                } catch (const YAML::Exception& ex) {
-                    return make_error(ex.what(),
-                                       {"dirichlet", "fixes", std::format("[{}]", i), "group"});
                 }
-                auto dof_result = node_to_string_vec(entry["dof"],
-                                                     {"dirichlet", "fixes", std::format("[{}]", i), "dof"});
-                if (!dof_result) {
+                catch (const YAML::Exception &ex)
+                {
+                    return make_error(ex.what(), {"dirichlet", "fixes", std::format("[{}]", i), "group"});
+                }
+                auto dof_result =
+                    node_to_string_vec(entry["dof"], {"dirichlet", "fixes", std::format("[{}]", i), "dof"});
+                if (!dof_result)
+                {
                     return std::unexpected(dof_result.error());
                 }
-                if (dof_result->empty()) {
+                if (dof_result->empty())
+                {
                     return make_error("dirichlet.dof must not be empty",
-                                       {"dirichlet", "fixes", std::format("[{}]", i), "dof"});
+                                      {"dirichlet", "fixes", std::format("[{}]", i), "dof"});
                 }
                 fix.constrain_axis = {false, false, false};
-                for (const auto& axis : *dof_result) {
-                    if (axis == "x") {
+                for (const auto &axis : *dof_result)
+                {
+                    if (axis == "x")
+                    {
                         fix.constrain_axis[0] = true;
-                    } else if (axis == "y") {
+                    }
+                    else if (axis == "y")
+                    {
                         fix.constrain_axis[1] = true;
-                    } else if (axis == "z") {
+                    }
+                    else if (axis == "z")
+                    {
                         fix.constrain_axis[2] = true;
-                    } else {
+                    }
+                    else
+                    {
                         return make_error("dirichlet.dof must be subset of {x,y,z}",
-                                           {"dirichlet", "fixes", std::format("[{}]", i), "dof"});
+                                          {"dirichlet", "fixes", std::format("[{}]", i), "dof"});
                     }
                 }
-                auto value_result = node_to_optional_vec3(entry["value"],
-                                                          {"dirichlet", "fixes", std::format("[{}]", i), "value"});
-                if (!value_result) {
+                auto value_result = node_to_optional_vec3(
+                    entry["value"], {"dirichlet", "fixes", std::format("[{}]", i), "value"});
+                if (!value_result)
+                {
                     return std::unexpected(value_result.error());
                 }
                 fix.value = value_result.value();
@@ -432,26 +521,35 @@ auto parse_config_node(const YAML::Node& root) -> ConfigResult
 
     // output
     const auto output_node = root["output"];
-    if (!output_node || !output_node.IsMap()) {
+    if (!output_node || !output_node.IsMap())
+    {
         return make_error("missing output map", {"output"});
     }
-    try {
+    try
+    {
         cfg.output.vtu_stride = output_node["vtu_stride"].as<std::uint32_t>();
-    } catch (const YAML::Exception& ex) {
+    }
+    catch (const YAML::Exception &ex)
+    {
         return make_error(ex.what(), {"output", "vtu_stride"});
     }
-    if (cfg.output.vtu_stride == 0U) {
+    if (cfg.output.vtu_stride == 0U)
+    {
         return make_error("output.vtu_stride must be >= 1", {"output", "vtu_stride"});
     }
     const auto probes_node = output_node["probes"];
-    if (probes_node && probes_node.IsSequence()) {
+    if (probes_node && probes_node.IsSequence())
+    {
         cfg.output.probes.reserve(probes_node.size());
-        for (std::size_t i = 0; i < probes_node.size(); ++i) {
-            try {
+        for (std::size_t i = 0; i < probes_node.size(); ++i)
+        {
+            try
+            {
                 cfg.output.probes.emplace_back(probes_node[i].as<std::uint32_t>());
-            } catch (const YAML::Exception& ex) {
-                return make_error(ex.what(),
-                                   {"output", "probes", std::format("[{}]", i)});
+            }
+            catch (const YAML::Exception &ex)
+            {
+                return make_error(ex.what(), {"output", "probes", std::format("[{}]", i)});
             }
         }
     }
@@ -459,4 +557,4 @@ auto parse_config_node(const YAML::Node& root) -> ConfigResult
     return cfg;
 }
 
-}  // namespace cwf::config
+} // namespace cwf::config

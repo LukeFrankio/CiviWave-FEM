@@ -90,3 +90,6 @@ __pycache__/
 
 # Reference documentation
 /RefDocs
+
+# Local clang-tidy report
+clang_tidy_report.txt

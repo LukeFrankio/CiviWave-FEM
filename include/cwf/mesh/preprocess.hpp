@@ -22,34 +22,38 @@
 #include "cwf/config/config.hpp"
 #include "cwf/mesh/mesh.hpp"
 
-namespace cwf::mesh::pre {
+namespace cwf::mesh::pre
+{
 
 /**
  * @brief preprocessing error info with context breadcrumbs
  */
-struct PreprocessError {
-    std::string message;
+struct PreprocessError
+{
+    std::string              message;
     std::vector<std::string> context;
 };
 
 /**
  * @brief CSR-style node adjacency (node → elements, local ids)
  */
-struct NodeAdjacency {
-    std::vector<std::uint32_t> offsets;          ///< size = nodes + 1
-    std::vector<std::uint32_t> element_indices;  ///< flattened element indices per node
-    std::vector<std::uint8_t> local_indices;     ///< corresponding local node slot (0-7)
+struct NodeAdjacency
+{
+    std::vector<std::uint32_t> offsets;         ///< size = nodes + 1
+    std::vector<std::uint32_t> element_indices; ///< flattened element indices per node
+    std::vector<std::uint8_t>  local_indices;   ///< corresponding local node slot (0-7)
 };
 
 /**
  * @brief bundle of FEM preprocessing outputs ready for GPU packaging
  */
-struct Outputs {
-    NodeAdjacency adjacency;                                           ///< node-element incidence
-    std::vector<double> element_volumes;                               ///< volume per element [m^3]
-    std::vector<std::array<common::Vec3, 8>> shape_gradients;          ///< grad Ni per element (tet uses first 4)
-    std::vector<double> lumped_mass;                                   ///< mass per node [kg]
-    std::vector<std::size_t> element_material_index;                   ///< index into config.materials per element
+struct Outputs
+{
+    NodeAdjacency                            adjacency;       ///< node-element incidence
+    std::vector<double>                      element_volumes; ///< volume per element [m^3]
+    std::vector<std::array<common::Vec3, 8>> shape_gradients; ///< grad Ni per element (tet uses first 4)
+    std::vector<double>                      lumped_mass;     ///< mass per node [kg]
+    std::vector<std::size_t> element_material_index;          ///< index into config.materials per element
 };
 
 /**
@@ -61,7 +65,7 @@ struct Outputs {
  * @param[in] cfg validated configuration data (materials, assignments)
  * @return std::expected of Outputs or PreprocessError on invalid geometry/config
  */
-[[nodiscard]] auto run(const mesh::Mesh& mesh, const config::Config& cfg)
+[[nodiscard]] auto run(const mesh::Mesh &mesh, const config::Config &cfg)
     -> std::expected<Outputs, PreprocessError>;
 
-}  // namespace cwf::mesh::pre
+} // namespace cwf::mesh::pre

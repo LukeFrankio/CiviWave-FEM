@@ -5,10 +5,18 @@ Checks: >
   readability-*,
   modernize-*,
   clang-diagnostic-*,
-  cppcoreguidelines-*
+  cppcoreguidelines-*,
+  clang-analyzer-*,
+  hicpp-*,
+  cert-*,
+  security-*,
+  misc-*,
+  portability-*,
+  llvm-*,
+  google-*
 WarningsAsErrors: '*'
-HeaderFilterRegex: '^(src|include)/'
-AnalyzeTemporaryDtors: true
+HeaderFilterRegex: '(^|[\\/])(src|include)[\\/]'
+# AnalyzeTemporaryDtors: true  # commented out because some clang-tidy versions don't recognize this key
 FormatStyle: file
 User: CiviWave
 ExtraArgs:
@@ -33,3 +41,5 @@ CheckOptions:
     value: lower_case
   - key: readability-identifier-naming.PrivateMemberSuffix
     value: _
+  - key: modernize-use-trailing-return-type.MinTypeNameLength
+    value: '0'
