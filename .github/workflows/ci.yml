@@ -11,24 +11,27 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
-      - name: Install GCC toolchain and Ninja (try GCC-15, fall back to GCC-14)
+      - name: Install modern toolchain (prefer GCC 15, fall back to Clang 19 + libc++)
         run: |
+          set -e
           sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
           sudo apt-get update
-          # Try to install GCC 15 first. If it fails, attempt GCC 14. Do not fail the job if both are unavailable.
           if sudo apt-get install -y gcc-15 g++-15; then
             echo "Using gcc-15"
             echo "CC=gcc-15" | tee -a "$GITHUB_ENV"
             echo "CXX=g++-15" | tee -a "$GITHUB_ENV"
           else
-            echo "Failed to install GCC 15, attempting GCC 14 (will not fail the job if unavailable)"
-            if sudo apt-get install -y gcc-14 g++-14; then
-              echo "Using gcc-14"
-              echo "CC=gcc-14" | tee -a "$GITHUB_ENV"
-              echo "CXX=g++-14" | tee -a "$GITHUB_ENV"
-            else
-              echo "Failed to install GCC 14 as well; continuing with system default gcc/g++ (job will not fail)" >&2
-            fi
+            echo "GCC 15 unavailable; installing Clang 19 toolchain with libc++ fallback" >&2
+            wget https://apt.llvm.org/llvm.sh
+            chmod +x llvm.sh
+            sudo ./llvm.sh 19
+            sudo apt-get install -y clang-19 lld-19 libc++-19-dev libc++abi-19-dev
+            rm -f llvm.sh
+            echo "CC=clang-19" | tee -a "$GITHUB_ENV"
+            echo "CXX=clang++-19" | tee -a "$GITHUB_ENV"
+            echo "USE_LIBCXX=ON" | tee -a "$GITHUB_ENV"
+            echo "CXXFLAGS=-stdlib=libc++" | tee -a "$GITHUB_ENV"
+            echo "LDFLAGS=-stdlib=libc++ -lc++abi" | tee -a "$GITHUB_ENV"
           fi
           sudo apt-get install -y ninja-build python3-pip
       - name: Install formatting & linting tools
@@ -41,7 +44,11 @@ jobs:
           cmake --version
       - name: Configure
         run: |
-          cmake -S . -B build -G Ninja -DFORCE_FETCH_DEPS=ON -DENABLE_VALIDATION=ON -DREQUIRE_GCC_15=OFF
+          if [ "${USE_LIBCXX:-}" = "ON" ]; then
+            cmake -S . -B build -G Ninja -DFORCE_FETCH_DEPS=ON -DENABLE_VALIDATION=ON -DREQUIRE_GCC_15=OFF -DCMAKE_CXX_FLAGS="$CXXFLAGS" -DCMAKE_EXE_LINKER_FLAGS="$LDFLAGS" -DCMAKE_SHARED_LINKER_FLAGS="$LDFLAGS"
+          else
+            cmake -S . -B build -G Ninja -DFORCE_FETCH_DEPS=ON -DENABLE_VALIDATION=ON -DREQUIRE_GCC_15=OFF
+          fi
       - name: Build (Release)
         run: |
           cmake --build build --config Release -- -k 0
@@ -70,6 +77,7 @@ jobs:
       - name: Set up MSYS2 with MinGW-w64 (UCRT)
         uses: msys2/setup-msys2@v2
         with:
+          msystem: UCRT64
           update: true
           install: >-
             mingw-w64-ucrt-x86_64-gcc
@@ -77,6 +85,10 @@ jobs:
             mingw-w64-ucrt-x86_64-cmake
             mingw-w64-ucrt-x86_64-clang
             mingw-w64-ucrt-x86_64-clang-tools-extra
+            mingw-w64-ucrt-x86_64-libc++
+            mingw-w64-ucrt-x86_64-libc++abi
+            mingw-w64-ucrt-x86_64-libunwind
+            mingw-w64-ucrt-x86_64-lld
       - name: Ensure CMake CLI available (Windows)
         if: runner.os == 'Windows'
         shell: powershell
@@ -98,6 +110,7 @@ jobs:
         shell: msys2 {0}
         run: |
           set -e
+          github_env_path=$(cygpath -u "$GITHUB_ENV")
           echo "Attempting to ensure a modern GCC is available (prefer >=15.2). This step will try to upgrade but will not fail the job if GCC 15 isn't available."
           # Try to update package DB and install/update mingw gcc packages (best-effort)
           if pacman -Sy --noconfirm mingw-w64-ucrt-x86_64-gcc; then
@@ -111,6 +124,13 @@ jobs:
           minor=$(echo "$ver" | cut -d. -f2)
           if [ "$major" -gt 15 ] || { [ "$major" -eq 15 ] && [ "$minor" -ge 2 ]; }; then
             echo "GCC $ver meets >=15.2 requirement"
+            {
+              echo "CC=gcc"
+              echo "CXX=g++"
+              echo "USE_LIBCXX="
+              echo "CXXFLAGS="
+              echo "LDFLAGS="
+            } >> "$github_env_path"
           else
             echo "GCC $ver is older than 15.2. Attempting full toolchain upgrade (best-effort)" >&2
             pacman -Syu --noconfirm mingw-w64-ucrt-x86_64-toolchain || echo "Toolchain install failed or not available; continuing with existing compiler" >&2
@@ -120,15 +140,33 @@ jobs:
             major=$(echo "$ver" | cut -d. -f1)
             minor=$(echo "$ver" | cut -d. -f2)
             if [ "$major" -lt 15 ] || { [ "$major" -eq 15 ] && [ "$minor" -lt 2 ]; }; then
-              echo "Still using older GCC ($ver). Continuing the job but note tests/build may use an older compiler." >&2
+              echo "Still using older GCC ($ver). Falling back to Clang with libc++ for C++26 support." >&2
+              {
+                echo "CC=clang"
+                echo "CXX=clang++"
+                echo "USE_LIBCXX=ON"
+                echo "CXXFLAGS=-stdlib=libc++"
+                echo "LDFLAGS=-stdlib=libc++ -lc++abi -lunwind"
+              } >> "$github_env_path"
             else
               echo "Now using GCC $ver (>=15.2)"
+              {
+                echo "CC=gcc"
+                echo "CXX=g++"
+                echo "USE_LIBCXX="
+                echo "CXXFLAGS="
+                echo "LDFLAGS="
+              } >> "$github_env_path"
             fi
           fi
       - name: Configure (MinGW)
         shell: msys2 {0}
         run: |
-          cmake -S . -B build -G Ninja -DFORCE_FETCH_DEPS=ON -DENABLE_VALIDATION=ON -DREQUIRE_GCC_15=OFF
+          if [ "${USE_LIBCXX:-}" = "ON" ]; then
+            cmake -S . -B build -G Ninja -DFORCE_FETCH_DEPS=ON -DENABLE_VALIDATION=ON -DREQUIRE_GCC_15=OFF -DCMAKE_CXX_FLAGS="$CXXFLAGS" -DCMAKE_EXE_LINKER_FLAGS="$LDFLAGS" -DCMAKE_SHARED_LINKER_FLAGS="$LDFLAGS"
+          else
+            cmake -S . -B build -G Ninja -DFORCE_FETCH_DEPS=ON -DENABLE_VALIDATION=ON -DREQUIRE_GCC_15=OFF
+          fi
       - name: Build (Release)
         shell: msys2 {0}
         run: |
