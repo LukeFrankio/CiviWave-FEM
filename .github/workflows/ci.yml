@@ -86,7 +86,6 @@ jobs:
             mingw-w64-ucrt-x86_64-clang
             mingw-w64-ucrt-x86_64-clang-tools-extra
             mingw-w64-ucrt-x86_64-libc++
-            mingw-w64-ucrt-x86_64-libc++abi
             mingw-w64-ucrt-x86_64-libunwind
             mingw-w64-ucrt-x86_64-lld
       - name: Ensure CMake CLI available (Windows)
@@ -141,12 +140,17 @@ jobs:
             minor=$(echo "$ver" | cut -d. -f2)
             if [ "$major" -lt 15 ] || { [ "$major" -eq 15 ] && [ "$minor" -lt 2 ]; }; then
               echo "Still using older GCC ($ver). Falling back to Clang with libc++ for C++26 support." >&2
+              extra_ldflags="-stdlib=libc++ -lunwind"
+              if [ -f /ucrt64/lib/libc++abi.dll.a ]; then
+                extra_ldflags="$extra_ldflags -lc++abi"
+              fi
               {
                 echo "CC=clang"
                 echo "CXX=clang++"
                 echo "USE_LIBCXX=ON"
                 echo "CXXFLAGS=-stdlib=libc++"
-                echo "LDFLAGS=-stdlib=libc++ -lc++abi -lunwind"
+                printf 'LDFLAGS=%s
+' "$extra_ldflags"
               } >> "$github_env_path"
             else
               echo "Now using GCC $ver (>=15.2)"
