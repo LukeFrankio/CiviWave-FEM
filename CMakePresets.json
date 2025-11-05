@@ -1,5 +1,4 @@
 {
-  "$schema": "https://cmake.org/cmake/help/v3.27/manual/cmake-presets.7.json",
   "version": 6,
   "cmakeMinimumRequired": {
     "major": 4,

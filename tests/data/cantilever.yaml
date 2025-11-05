@@ -1,0 +1,46 @@
+mesh:
+  path: tests/data/cantilever.msh
+materials:
+  - name: concrete
+    E: 3.0e10
+    nu: 0.2
+    rho: 2500.0
+assignments:
+  - group: SOLID
+    material: concrete
+damping:
+  xi: 0.02
+  w1: 10.0
+  w2: 100.0
+time:
+  dt: 0.01111
+  adaptive: true
+  min_dt: 0.005
+  max_dt: 0.02
+solver:
+  type: pcg
+  preconditioner: block_jacobi
+  tol_runtime: 2.0e-4
+  tol_pause: 1.0e-5
+  max_iters: 120
+precision:
+  vectors: fp32
+  reductions: fp64
+curves:
+  load_curve1:
+    - [0.0, 0.0]
+    - [0.5, 0.75]
+    - [1.0, 1.0]
+loads:
+  gravity: [0.0, 0.0, -9.81]
+  tractions:
+    - group: LOAD_FACE
+      value: [0.0, 0.0, -1.0e5]
+      scale_curve: load_curve1
+dirichlet:
+  fixes:
+    - group: FIXED_BASE
+      dof: [x, y, z]
+output:
+  vtu_stride: 10
+  probes: [1, 2]
