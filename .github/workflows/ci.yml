@@ -89,6 +89,7 @@ jobs:
             mingw-w64-ucrt-x86_64-libunwind
             mingw-w64-ucrt-x86_64-lld
             git
+            diffutils
       - name: Ensure CMake CLI available (Windows)
         if: runner.os == 'Windows'
         shell: powershell
