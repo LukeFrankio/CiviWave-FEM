@@ -35,8 +35,7 @@
  * // config.mesh.path now holds the mesh filepath, ready for the next stage uwu
  * @endcode
  */
-#ifndef CWF_CONFIG_CONFIG_HPP
-#define CWF_CONFIG_CONFIG_HPP
+#pragma once
 
 #include <array>
 #include <expected>
@@ -54,7 +53,7 @@ namespace YAML
 class Node;
 } // namespace YAML
 
-namespace Cwf::Config
+namespace cwf::config
 {
 
 /**
@@ -81,7 +80,7 @@ enum class DegreeOfFreedom : std::uint8_t
  * breadcrumb trail (e.g., "materials[1].E"), making debugging YAML typos
  * painless.
  */
-struct alignas(64) ConfigError
+struct ConfigError
 {
     std::string              message; ///< spicy human-readable error message uwu
     std::vector<std::string> context; ///< breadcrumb trail showing where things derailed
@@ -95,7 +94,7 @@ struct alignas(64) ConfigError
  * holds engineering-grade constants for homogeneous linear elastic materials.
  * Values stay in SI units. density = rho, E = Young's modulus, nu = Poisson.
  */
-struct alignas(64) Material
+struct Material
 {
     std::string name;           ///< unique material nickname, referenced in assignments
     double      youngs_modulus; ///< E [Pa], must be > 0
@@ -106,7 +105,7 @@ struct alignas(64) Material
 /**
  * @brief maps mesh physical groups to material names (per spec Section 3)
  */
-struct alignas(64) Assignment
+struct Assignment
 {
     std::string group;    ///< physical group name from mesh (e.g., "SOLID")
     std::string material; ///< material name defined in materials list
@@ -117,7 +116,7 @@ struct alignas(64) Assignment
  *
  * stores the user input values so preprocessing can compute alpha/beta later.
  */
-struct alignas(32) Damping
+struct Damping
 {
     double xi; ///< damping ratio target (0.0 - 1.0 typically)
     double w1; ///< lower angular frequency for Rayleigh fit [rad/s]
@@ -127,7 +126,7 @@ struct alignas(32) Damping
 /**
  * @brief simulation time step defaults + bounds (adaptive aware)
  */
-struct alignas(32) TimeSettings
+struct TimeSettings
 {
     double initial_dt; ///< starting timestep [s]
     bool   adaptive;   ///< enable adaptive dt policies per spec
@@ -138,7 +137,7 @@ struct alignas(32) TimeSettings
 /**
  * @brief solver knob pack mirroring the spec (PCG etc.)
  */
-struct alignas(128) SolverSettings
+struct SolverSettings
 {
     std::string   type;              ///< e.g., "pcg"
     std::string   preconditioner;    ///< e.g., "block_jacobi"
@@ -150,7 +149,7 @@ struct alignas(128) SolverSettings
 /**
  * @brief precision options for GPU vectors vs reductions
  */
-struct alignas(64) PrecisionSettings
+struct PrecisionSettings
 {
     std::string vector_precision;    ///< e.g., "fp32"
     std::string reduction_precision; ///< e.g., "fp64"
@@ -159,7 +158,7 @@ struct alignas(64) PrecisionSettings
 /**
  * @brief piecewise-linear curve, used by loads/time scaling
  */
-struct alignas(32) Curve
+struct Curve
 {
     std::vector<std::pair<double, double>> points; ///< (time, value) pairs sorted by time
 };
@@ -167,7 +166,7 @@ struct alignas(32) Curve
 /**
  * @brief surface traction definition referencing YAML curves (optional)
  */
-struct alignas(128) SurfaceTraction
+struct SurfaceTraction
 {
     std::string           group;       ///< surface physical group name
     std::array<double, 3> value;       ///< traction direction + magnitude [Pa]
@@ -177,7 +176,7 @@ struct alignas(128) SurfaceTraction
 /**
  * @brief aggregated load definitions (body + surface)
  */
-struct alignas(64) Loads
+struct Loads
 {
     std::array<double, 3>        gravity;   ///< global gravity vector [m/s^2]
     std::vector<SurfaceTraction> tractions; ///< list of surface loads
@@ -186,7 +185,7 @@ struct alignas(64) Loads
 /**
  * @brief Dirichlet condition specification from YAML groups
  */
-struct alignas(128) DirichletFix
+struct DirichletFix
 {
     std::string                          group;          ///< named group from mesh (usually surfaces)
     std::array<bool, 3>                  constrain_axis; ///< which dofs are locked (xyz)
@@ -196,7 +195,7 @@ struct alignas(128) DirichletFix
 /**
  * @brief output controls (VTU cadence, probe nodes)
  */
-struct alignas(32) OutputSettings
+struct OutputSettings
 {
     std::uint32_t              vtu_stride; ///< write VTU every N frames (>= 1)
     std::vector<std::uint32_t> probes;     ///< node indices to track
@@ -205,7 +204,7 @@ struct alignas(32) OutputSettings
 /**
  * @brief main configuration object bundling all scenario inputs
  */
-struct alignas(128) Config
+struct Config
 {
     std::filesystem::path                  mesh_path;   ///< path to mesh (relative allowed)
     std::vector<Material>                  materials;   ///< materials registry
@@ -266,7 +265,7 @@ using ConfigResult = std::expected<Config, ConfigError>;
  * @param[in] yaml_text YAML document contents (UTF-8)
  * @return ConfigResult identical semantics to file loader
  */
-[[nodiscard]] auto loadConfigFromString(std::string_view yaml_text) -> ConfigResult;
+[[nodiscard]] auto load_config_from_string(std::string_view yaml_text) -> ConfigResult;
 
 /**
  * @brief low-level parser for already-loaded YAML nodes (advanced usage)
@@ -279,8 +278,6 @@ using ConfigResult = std::expected<Config, ConfigError>;
  * @param[in] root YAML root node produced by yaml-cpp
  * @return ConfigResult success or ConfigError with breadcrumbs
  */
-[[nodiscard]] auto parseConfigNode(const YAML::Node &root) -> ConfigResult;
+[[nodiscard]] auto parse_config_node(const YAML::Node &root) -> ConfigResult;
 
-} // namespace Cwf::Config
-
-#endif // CWF_CONFIG_CONFIG_HPP
+} // namespace cwf::config
