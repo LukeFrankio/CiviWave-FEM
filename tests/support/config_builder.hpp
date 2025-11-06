@@ -53,6 +53,13 @@ struct TractionSpec
     std::string           scale_curve{"load_curve1"};
 };
 
+struct PointLoadSpec
+{
+    std::string           group{"POINT_LOAD"};
+    std::array<double, 3> value{0.0, 0.0, -1.0e3};
+    std::string           scale_curve{};
+};
+
 struct DirichletSpec
 {
     std::string                          group{"FIXED_BASE"};
@@ -98,9 +105,11 @@ struct ConfigBuilderOptions
     bool                   include_curves{true};
     std::vector<CurveSpec> curves{{}};
 
-    bool                      include_loads{true};
-    std::array<double, 3>     gravity{0.0, 0.0, -9.81};
-    std::vector<TractionSpec> tractions{{}};
+    bool                       include_loads{true};
+    std::array<double, 3>      gravity{0.0, 0.0, -9.81};
+    std::vector<TractionSpec>  tractions{{}};
+    bool                       include_point_loads{true};
+    std::vector<PointLoadSpec> point_loads{};
 
     bool                       include_dirichlet{true};
     std::vector<DirichletSpec> dirichlet_fixes{{}};
@@ -294,6 +303,27 @@ inline auto make_config_yaml(const ConfigBuilderOptions &options = {}) -> std::s
                 if (!traction.scale_curve.empty())
                 {
                     oss << "      scale_curve: " << traction.scale_curve << "\n";
+                }
+            }
+        }
+        if (options.include_point_loads)
+        {
+            oss << "  points:\n";
+            if (options.point_loads.empty())
+            {
+                oss << "    []\n";
+            }
+            else
+            {
+                for (const auto &point : options.point_loads)
+                {
+                    oss << "    - group: " << point.group << "\n";
+                    oss << "      value: ";
+                    detail::write_vec3(oss, "", point.value);
+                    if (!point.scale_curve.empty())
+                    {
+                        oss << "      scale_curve: " << point.scale_curve << "\n";
+                    }
                 }
             }
         }

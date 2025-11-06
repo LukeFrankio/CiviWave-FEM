@@ -65,6 +65,12 @@ TEST(MeshLoader, LoadsCantileverFixtureAndCreatesPhysicalLookup)
     EXPECT_THAT(element.nodes,
                 ElementsAre(0U, 1U, 2U, 3U, ::testing::_, ::testing::_, ::testing::_, ::testing::_));
 
+    ASSERT_EQ(mesh.surfaces.size(), 2U);
+    EXPECT_TRUE(mesh.surface_groups.contains(1U));
+    EXPECT_TRUE(mesh.surface_groups.contains(2U));
+    EXPECT_EQ(mesh.surface_groups.at(1U).size(), 1U);
+    EXPECT_EQ(mesh.surface_groups.at(2U).size(), 1U);
+
     EXPECT_FALSE(mesh.physical_groups.empty());
     const auto lookup_iter = mesh.group_lookup.find(3U);
     ASSERT_NE(lookup_iter, mesh.group_lookup.end());

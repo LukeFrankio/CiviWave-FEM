@@ -209,16 +209,51 @@ struct MaterialBinding
                 std::format("dirichlet fix references missing physical group '{}'", fix.group),
                 {"dirichlet", "fixes", std::format("[{}]", i)}});
         }
+        const auto group_id = name_to_group.at(fix.group);
+        const auto surf_it  = mesh.surface_groups.find(group_id);
+        if (surf_it == mesh.surface_groups.end() || surf_it->second.empty())
+        {
+            return std::unexpected(
+                PreprocessError{std::format("dirichlet group '{}' lacks surface elements", fix.group),
+                                {"dirichlet", "fixes", std::format("[{}]", i)}});
+        }
     }
 
     for (std::size_t i = 0; i < cfg.loads.tractions.size(); ++i)
     {
-        const auto &traction = cfg.loads.tractions[i];
-        if (name_to_group.find(traction.group) == name_to_group.end())
+        const auto &traction   = cfg.loads.tractions[i];
+        const auto  group_iter = name_to_group.find(traction.group);
+        if (group_iter == name_to_group.end())
         {
             return std::unexpected(PreprocessError{
                 std::format("traction load references missing physical group '{}'", traction.group),
                 {"loads", "tractions", std::format("[{}]", i)}});
+        }
+        const auto surf_it = mesh.surface_groups.find(group_iter->second);
+        if (surf_it == mesh.surface_groups.end() || surf_it->second.empty())
+        {
+            return std::unexpected(
+                PreprocessError{std::format("traction group '{}' has no discretized faces", traction.group),
+                                {"loads", "tractions", std::format("[{}]", i)}});
+        }
+    }
+
+    for (std::size_t i = 0; i < cfg.loads.points.size(); ++i)
+    {
+        const auto &load       = cfg.loads.points[i];
+        const auto  group_iter = name_to_group.find(load.group);
+        if (group_iter == name_to_group.end())
+        {
+            return std::unexpected(
+                PreprocessError{std::format("point load references missing physical group '{}'", load.group),
+                                {"loads", "points", std::format("[{}]", i)}});
+        }
+        const auto nodes_it = mesh.node_groups.find(group_iter->second);
+        if (nodes_it == mesh.node_groups.end() || nodes_it->second.empty())
+        {
+            return std::unexpected(
+                PreprocessError{std::format("point load group '{}' has no tagged nodes", load.group),
+                                {"loads", "points", std::format("[{}]", i)}});
         }
     }
 

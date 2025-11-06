@@ -61,6 +61,15 @@ enum class ElementGeometry : std::uint8_t
 };
 
 /**
+ * @brief supported surface topologies for boundary shenanigans
+ */
+enum class SurfaceGeometry : std::uint8_t
+{
+    Triangle3      = 3U,
+    Quadrilateral4 = 4U
+};
+
+/**
  * @brief physical group metadata direct from Gmsh (dimension aware)
  */
 struct PhysicalGroup
@@ -91,6 +100,17 @@ struct Element
 };
 
 /**
+ * @brief surface element describing traction/BC faces (tri/quad vibes)
+ */
+struct Surface
+{
+    std::uint32_t                original_id;    ///< id from mesh file for traceability
+    SurfaceGeometry              geometry;       ///< topology (Triangle3/Quadrilateral4)
+    std::array<std::uint32_t, 4> nodes{};        ///< node indices (unused slots max)
+    std::uint32_t                physical_group; ///< associated physical group id
+};
+
+/**
  * @brief compact adjacency-friendly mesh representation
  */
 struct Mesh
@@ -99,6 +119,11 @@ struct Mesh
     std::vector<Element>                           elements;        ///< supported volume elements (tet/hexa)
     std::vector<PhysicalGroup>                     physical_groups; ///< physical metadata
     std::unordered_map<std::uint32_t, std::size_t> group_lookup;    ///< id → index map for fast lookup
+    std::vector<Surface>                           surfaces; ///< boundary faces tagged via physical groups
+    std::unordered_map<std::uint32_t, std::vector<std::uint32_t>>
+        node_groups; ///< physical id -> node indices
+    std::unordered_map<std::uint32_t, std::vector<std::size_t>>
+        surface_groups; ///< physical id -> surface indices
 };
 
 /**
@@ -112,8 +137,10 @@ using MeshResult = std::expected<Mesh, MeshError>;
  * ⚠️ IMPURE FUNCTION (file I/O and yaml-cpp-like parsing side effects)
  *
  * handles nodes, tetrahedra, and hexahedra. orientation validated; zero/negative
- * volumes throw errors. surfaces are captured via PhysicalGroup but stored only
- * as metadata in this phase.
+ * volumes throw errors. tagged boundary faces (tri/quad) get captured explicitly
+ * so later stages can map tractions/dirichlet constraints to concrete node sets.
+ * node physical groups (dimension 0) also populate mesh.node_groups for spicy
+ * point loads.
  *
  * @param[in] path filesystem path to .msh file
  * @return MeshResult containing mesh or MeshError with context breadcrumbs

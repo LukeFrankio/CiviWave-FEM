@@ -31,11 +31,27 @@ constexpr auto make_entity_key(std::uint32_t dimension, std::uint32_t tag) noexc
 struct EntitiesInfo
 {
     std::unordered_map<EntityKey, std::vector<std::uint32_t>> physical_mapping;
+    std::unordered_map<std::uint32_t, std::uint32_t>          physical_dimensions;
 };
 
 struct PhysicalNamesInfo
 {
     std::unordered_map<EntityKey, std::string> names;
+};
+
+struct NodesParseResult
+{
+    std::vector<Node>                                             nodes;
+    std::unordered_map<std::uint32_t, std::size_t>                id_to_index;
+    std::unordered_map<std::uint32_t, std::vector<std::uint32_t>> nodes_by_group;
+};
+
+struct ElementsParseResult
+{
+    std::vector<Element>                                        volume_elements;
+    std::vector<Surface>                                        surface_elements;
+    std::unordered_map<std::uint32_t, std::vector<std::size_t>> surface_groups;
+    std::unordered_set<std::uint32_t>                           used_physical_ids;
 };
 
 [[nodiscard]] auto trim(std::string_view value) -> std::string_view
@@ -112,6 +128,7 @@ struct PhysicalNamesInfo
                 std::uint32_t phys{};
                 entity_stream >> phys;
                 phys_ids.push_back(phys);
+                info.physical_dimensions.emplace(phys, dimension);
             }
             if (!phys_ids.empty())
             {
@@ -140,12 +157,13 @@ struct PhysicalNamesInfo
     return info;
 }
 
-[[nodiscard]] auto parse_nodes(std::istringstream &stream)
-    -> std::expected<std::pair<std::vector<Node>, std::unordered_map<std::uint32_t, std::size_t>>, MeshError>
+[[nodiscard]] auto parse_nodes(std::istringstream &stream, const EntitiesInfo &entities)
+    -> std::expected<NodesParseResult, MeshError>
 {
-    std::vector<Node>                              nodes;
-    std::unordered_map<std::uint32_t, std::size_t> id_to_index;
-    std::string                                    line;
+    std::vector<Node>                                             nodes;
+    std::unordered_map<std::uint32_t, std::size_t>                id_to_index;
+    std::unordered_map<std::uint32_t, std::vector<std::uint32_t>> nodes_by_group;
+    std::string                                                   line;
     if (!std::getline(stream, line))
     {
         return std::unexpected(MeshError{"unexpected EOF in $Nodes header", {"Nodes"}});
@@ -169,6 +187,10 @@ struct PhysicalNamesInfo
         (void) entity_dim;
         (void) parametric;
 
+        const auto  entity_key = make_entity_key(entity_dim, entity_tag);
+        const auto  phys_iter  = entities.physical_mapping.find(entity_key);
+        const auto *phys_ids   = phys_iter != entities.physical_mapping.end() ? &phys_iter->second : nullptr;
+
         std::vector<std::uint32_t> node_ids(nodes_in_block);
         for (std::uint64_t i = 0; i < nodes_in_block; ++i)
         {
@@ -191,6 +213,14 @@ struct PhysicalNamesInfo
             Node node{node_ids[static_cast<std::size_t>(i)], common::Vec3{x, y, z}};
             id_to_index[node.original_id] = nodes.size();
             nodes.push_back(std::move(node));
+            const auto node_index = static_cast<std::uint32_t>(nodes.size() - 1U);
+            if (phys_ids != nullptr)
+            {
+                for (const auto phys_id : *phys_ids)
+                {
+                    nodes_by_group[phys_id].push_back(node_index);
+                }
+            }
         }
     }
 
@@ -198,13 +228,17 @@ struct PhysicalNamesInfo
     {
         return std::unexpected(MeshError{"node count mismatch", {"Nodes"}});
     }
-    return std::pair{std::move(nodes), std::move(id_to_index)};
+    return NodesParseResult{std::move(nodes), std::move(id_to_index), std::move(nodes_by_group)};
 }
 
 [[nodiscard]] auto element_node_count(std::uint32_t gmsh_type) -> std::optional<std::size_t>
 {
     switch (gmsh_type)
     {
+    case 2U:
+        return 3U; // Triangle
+    case 3U:
+        return 4U; // Quadrilateral
     case 4U:
         return 4U; // Tetrahedron
     case 5U:
@@ -227,13 +261,26 @@ struct PhysicalNamesInfo
     }
 }
 
+[[nodiscard]] auto to_surface_geometry(std::uint32_t gmsh_type) -> std::optional<SurfaceGeometry>
+{
+    switch (gmsh_type)
+    {
+    case 2U:
+        return SurfaceGeometry::Triangle3;
+    case 3U:
+        return SurfaceGeometry::Quadrilateral4;
+    default:
+        return std::nullopt;
+    }
+}
+
 [[nodiscard]] auto parse_elements(std::istringstream                                   &stream,
                                   const std::unordered_map<std::uint32_t, std::size_t> &id_to_index,
                                   const EntitiesInfo                                   &entities)
-    -> std::expected<std::vector<Element>, MeshError>
+    -> std::expected<ElementsParseResult, MeshError>
 {
-    std::vector<Element> elements;
-    std::string          line;
+    ElementsParseResult result{};
+    std::string         line;
     if (!std::getline(stream, line))
     {
         return std::unexpected(MeshError{"unexpected EOF in $Elements header", {"Elements"}});
@@ -241,7 +288,7 @@ struct PhysicalNamesInfo
     std::istringstream header_stream{line};
     std::uint64_t      num_blocks{}, num_elements{}, min_tag{}, max_tag{};
     header_stream >> num_blocks >> num_elements >> min_tag >> max_tag;
-    elements.reserve(static_cast<std::size_t>(num_elements));
+    std::size_t processed_count = 0U;
 
     for (std::uint64_t block = 0; block < num_blocks; ++block)
     {
@@ -254,14 +301,13 @@ struct PhysicalNamesInfo
         std::uint64_t      elements_in_block{};
         block_stream >> entity_dim >> entity_tag >> element_type >> elements_in_block;
         const auto node_count_opt = element_node_count(element_type);
-        const auto geom_opt       = to_geometry(element_type);
-        if (!node_count_opt || !geom_opt)
+        if (!node_count_opt)
         {
             return std::unexpected(MeshError{std::format("unsupported Gmsh element type {}", element_type),
                                              {"Elements", std::format("entityTag={}", entity_tag)}});
         }
-        const auto    node_count        = node_count_opt.value();
-        const auto    geom              = geom_opt.value();
+        const auto node_count = node_count_opt.value();
+
         const auto    entity_key        = make_entity_key(entity_dim, entity_tag);
         const auto    phys_iter         = entities.physical_mapping.find(entity_key);
         std::uint32_t physical_group_id = entity_tag;
@@ -270,42 +316,100 @@ struct PhysicalNamesInfo
             physical_group_id = phys_iter->second.front();
         }
 
+        const bool is_volume  = entity_dim == 3U;
+        const bool is_surface = entity_dim == 2U;
+
         for (std::uint64_t i = 0; i < elements_in_block; ++i)
         {
             if (!std::getline(stream, line))
             {
                 return std::unexpected(MeshError{"unexpected EOF reading element data", {"Elements"}});
             }
+            ++processed_count;
             std::istringstream elem_stream{line};
             std::uint32_t      element_tag{};
             elem_stream >> element_tag;
-            Element element{};
-            element.original_id    = element_tag;
-            element.geometry       = geom;
-            element.physical_group = physical_group_id;
-            element.nodes.fill(std::numeric_limits<std::uint32_t>::max());
-            for (std::size_t node_idx = 0; node_idx < node_count; ++node_idx)
+
+            if (is_volume)
             {
-                std::uint32_t node_tag{};
-                elem_stream >> node_tag;
-                const auto map_iter = id_to_index.find(node_tag);
-                if (map_iter == id_to_index.end())
+                const auto geom_opt = to_geometry(element_type);
+                if (!geom_opt)
                 {
                     return std::unexpected(
-                        MeshError{std::format("element references unknown node {}", node_tag),
+                        MeshError{std::format("unsupported volume element type {}", element_type),
                                   {"Elements", std::format("elementTag={}", element_tag)}});
                 }
-                element.nodes[node_idx] = static_cast<std::uint32_t>(map_iter->second);
+                Element element{};
+                element.original_id    = element_tag;
+                element.geometry       = geom_opt.value();
+                element.physical_group = physical_group_id;
+                element.nodes.fill(std::numeric_limits<std::uint32_t>::max());
+                for (std::size_t node_idx = 0; node_idx < node_count; ++node_idx)
+                {
+                    std::uint32_t node_tag{};
+                    elem_stream >> node_tag;
+                    const auto map_iter = id_to_index.find(node_tag);
+                    if (map_iter == id_to_index.end())
+                    {
+                        return std::unexpected(
+                            MeshError{std::format("element references unknown node {}", node_tag),
+                                      {"Elements", std::format("elementTag={}", element_tag)}});
+                    }
+                    element.nodes[node_idx] = static_cast<std::uint32_t>(map_iter->second);
+                }
+                result.used_physical_ids.insert(physical_group_id);
+                result.volume_elements.push_back(std::move(element));
             }
-            elements.push_back(std::move(element));
+            else if (is_surface)
+            {
+                const auto geom_opt = to_surface_geometry(element_type);
+                if (!geom_opt)
+                {
+                    return std::unexpected(
+                        MeshError{std::format("unsupported surface element type {}", element_type),
+                                  {"Elements", std::format("elementTag={}", element_tag)}});
+                }
+                Surface surface{};
+                surface.original_id    = element_tag;
+                surface.geometry       = geom_opt.value();
+                surface.physical_group = physical_group_id;
+                surface.nodes.fill(std::numeric_limits<std::uint32_t>::max());
+                for (std::size_t node_idx = 0; node_idx < node_count; ++node_idx)
+                {
+                    std::uint32_t node_tag{};
+                    elem_stream >> node_tag;
+                    const auto map_iter = id_to_index.find(node_tag);
+                    if (map_iter == id_to_index.end())
+                    {
+                        return std::unexpected(
+                            MeshError{std::format("surface references unknown node {}", node_tag),
+                                      {"Elements", std::format("elementTag={}", element_tag)}});
+                    }
+                    surface.nodes[node_idx] = static_cast<std::uint32_t>(map_iter->second);
+                }
+                result.used_physical_ids.insert(physical_group_id);
+                const auto index = result.surface_elements.size();
+                result.surface_groups[physical_group_id].push_back(index);
+                result.surface_elements.push_back(std::move(surface));
+            }
+            else
+            {
+                // Element belongs to dimension we currently ignore (lines, points). Consume node tags
+                // quietly.
+                for (std::size_t node_idx = 0; node_idx < node_count; ++node_idx)
+                {
+                    std::uint32_t discard{};
+                    elem_stream >> discard;
+                }
+            }
         }
     }
 
-    if (elements.size() != static_cast<std::size_t>(num_elements))
+    if (processed_count != static_cast<std::size_t>(num_elements))
     {
         return std::unexpected(MeshError{"element count mismatch", {"Elements"}});
     }
-    return elements;
+    return result;
 }
 
 [[nodiscard]] auto read_section(std::istringstream &stream, std::string_view expected_end)
@@ -347,6 +451,7 @@ auto load_gmsh_from_string(std::string_view ascii_contents) -> MeshResult
     EntitiesInfo                                   entities{};
     PhysicalNamesInfo                              physical_names{};
     std::unordered_set<EntityKey>                  seen_sections;
+    std::unordered_set<std::uint32_t>              referenced_group_ids;
 
     std::istringstream input{std::string(ascii_contents)};
     std::string        line;
@@ -378,13 +483,18 @@ auto load_gmsh_from_string(std::string_view ascii_contents) -> MeshResult
         else if (trimmed == "$Nodes")
         {
             auto section_stream = read_section(input, "$EndNodes");
-            auto result         = parse_nodes(section_stream);
+            auto result         = parse_nodes(section_stream, entities);
             if (!result)
             {
                 return std::unexpected(result.error());
             }
-            mesh.nodes  = std::move(result->first);
-            node_lookup = std::move(result->second);
+            mesh.nodes       = std::move(result->nodes);
+            node_lookup      = std::move(result->id_to_index);
+            mesh.node_groups = std::move(result->nodes_by_group);
+            for (const auto &[group_id, _] : mesh.node_groups)
+            {
+                referenced_group_ids.insert(group_id);
+            }
             seen_sections.insert(make_entity_key(7U, 7U));
         }
         else if (trimmed == "$Elements")
@@ -395,7 +505,10 @@ auto load_gmsh_from_string(std::string_view ascii_contents) -> MeshResult
             {
                 return std::unexpected(result.error());
             }
-            mesh.elements = std::move(result.value());
+            mesh.elements       = std::move(result->volume_elements);
+            mesh.surfaces       = std::move(result->surface_elements);
+            mesh.surface_groups = std::move(result->surface_groups);
+            referenced_group_ids.insert(result->used_physical_ids.begin(), result->used_physical_ids.end());
             seen_sections.insert(make_entity_key(6U, 6U));
         }
     }
@@ -416,13 +529,29 @@ auto load_gmsh_from_string(std::string_view ascii_contents) -> MeshResult
         const auto tag       = static_cast<std::uint32_t>(key & 0xFFFFFFFFU);
         group_map.emplace(tag, PhysicalGroup{dimension, tag, name});
     }
-    for (const auto &element : mesh.elements)
+    for (const auto &[phys_id, dimension] : entities.physical_dimensions)
     {
-        auto &group = group_map[element.physical_group];
+        auto &group = group_map[phys_id];
         if (group.id == 0U)
         {
-            group.id        = element.physical_group;
-            group.dimension = 3U;
+            group.id        = phys_id;
+            group.dimension = dimension;
+            group.name      = "";
+        }
+        else
+        {
+            group.dimension = dimension;
+        }
+    }
+    for (const auto group_id : referenced_group_ids)
+    {
+        auto &group = group_map[group_id];
+        if (group.id == 0U)
+        {
+            group.id        = group_id;
+            group.dimension = entities.physical_dimensions.contains(group_id)
+                                  ? entities.physical_dimensions.at(group_id)
+                                  : 0U;
             group.name      = "";
         }
     }

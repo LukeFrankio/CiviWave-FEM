@@ -55,6 +55,7 @@ TEST(ConfigValidation, ParsesGoldenConfigFromBuilder)
     ASSERT_EQ(config.curves.size(), 1U);
     EXPECT_EQ(config.curves.begin()->first, "load_curve1");
     EXPECT_THAT(config.loads.gravity, ElementsAre(0.0, 0.0, -9.81));
+    EXPECT_TRUE(config.loads.points.empty());
     ASSERT_EQ(config.dirichlet.size(), 1U);
     EXPECT_TRUE(config.dirichlet.front().constrain_axis[0]);
     EXPECT_EQ(config.output.vtu_stride, 10U);
@@ -66,6 +67,21 @@ TEST(ConfigValidation, LoadsConfigFromFixtureOnDisk)
     const auto result    = cwf::config::load_config_from_file(yaml_path);
     ASSERT_TRUE(result.has_value()) << result.error().message;
     EXPECT_EQ(result->mesh_path.generic_string(), "tests/data/cantilever.msh");
+}
+
+TEST(ConfigValidation, ParsesPointLoadsWithOptionalCurve)
+{
+    cwf::test_support::ConfigBuilderOptions options;
+    options.point_loads = {{"FIXED_BASE", {0.0, 0.0, -1234.5}, "load_curve1"},
+                           {"LOAD_FACE", {10.0, 0.0, 0.0}, {}}};
+    const auto yaml     = cwf::test_support::make_config_yaml(options);
+    const auto parsed   = cwf::config::load_config_from_string(yaml);
+    ASSERT_TRUE(parsed.has_value()) << parsed.error().message;
+    ASSERT_EQ(parsed->loads.points.size(), 2U);
+    EXPECT_EQ(parsed->loads.points.front().group, "FIXED_BASE");
+    EXPECT_DOUBLE_EQ(parsed->loads.points.front().value[2], -1234.5);
+    EXPECT_EQ(parsed->loads.points.front().scale_curve, "load_curve1");
+    EXPECT_TRUE(parsed->loads.points.back().scale_curve.empty());
 }
 
 struct InvalidConfigCase

@@ -2,6 +2,9 @@ add_library(cwf_core
 	config/config.cpp
 	mesh/mesh.cpp
 	mesh/preprocess.cpp
+	physics/loads.cpp
+	physics/newmark.cpp
+	physics/solver.cpp
 )
 
 target_include_directories(cwf_core

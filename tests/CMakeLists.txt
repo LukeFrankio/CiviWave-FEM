@@ -24,6 +24,7 @@ add_executable(cwf_core_tests
     config_validation_test.cpp
     mesh_loader_test.cpp
     preprocess_test.cpp
+    physics_test.cpp
 )
 
 target_link_libraries(cwf_core_tests PRIVATE

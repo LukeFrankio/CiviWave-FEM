@@ -449,6 +449,53 @@ auto parse_config_node(const YAML::Node &root) -> ConfigResult
             cfg.loads.tractions.push_back(std::move(traction));
         }
     }
+    else if (tractions_node && !tractions_node.IsSequence())
+    {
+        return make_error("loads.tractions must be a sequence when present", {"loads", "tractions"});
+    }
+
+    const auto points_node = loads_node["points"];
+    if (points_node && points_node.IsSequence())
+    {
+        cfg.loads.points.reserve(points_node.size());
+        for (std::size_t i = 0; i < points_node.size(); ++i)
+        {
+            const auto entry = points_node[i];
+            if (!entry.IsMap())
+            {
+                return make_error("point load entry must be map",
+                                  {"loads", "points", std::format("[{}]", i)});
+            }
+            PointLoad load{};
+            try
+            {
+                load.group = entry["group"].as<std::string>();
+                load.scale_curve =
+                    entry["scale_curve"].IsDefined() ? entry["scale_curve"].as<std::string>() : std::string{};
+            }
+            catch (const YAML::Exception &ex)
+            {
+                return make_error(ex.what(), {"loads", "points", std::format("[{}]", i)});
+            }
+            auto val_result =
+                node_to_vec3(entry["value"], {"loads", "points", std::format("[{}]", i), "value"});
+            if (!val_result)
+            {
+                return std::unexpected(val_result.error());
+            }
+            load.value = val_result.value();
+            if (!load.scale_curve.empty() && !cfg.curves.contains(load.scale_curve))
+            {
+                return make_error("point load references unknown curve",
+                                  {"loads", "points", std::format("[{}]", i), "scale_curve"});
+            }
+            cfg.loads.points.push_back(std::move(load));
+        }
+    }
+    else if (points_node && !points_node.IsSequence())
+    {
+        return make_error("loads.points must be a sequence when present", {"loads", "points"});
+    }
 
     // dirichlet
     const auto dirichlet_node = root["dirichlet"];

@@ -174,12 +174,29 @@ struct SurfaceTraction
 };
 
 /**
+ * @brief nodal point load definition with curve-driven spice
+ *
+ * ✨ PURE FUNCTION ✨ (struct semantics stay immutable if users treat it respectfully)
+ *
+ * captures concentrated loads applied to groups of mesh nodes (dimension 0 physical
+ * groups). values represent force components per node in SI units. optional time curves
+ * unlock vibe-shifting load histories without mutating code.
+ */
+struct PointLoad
+{
+    std::string           group;       ///< physical group name that tags target nodes
+    std::array<double, 3> value;       ///< point load vector per node [N]
+    std::string           scale_curve; ///< optional time-history curve id ("" when constant)
+};
+
+/**
  * @brief aggregated load definitions (body + surface)
  */
 struct Loads
 {
     std::array<double, 3>        gravity;   ///< global gravity vector [m/s^2]
     std::vector<SurfaceTraction> tractions; ///< list of surface loads
+    std::vector<PointLoad>       points;    ///< concentrated loads mapped to node groups
 };
 
 /**
