@@ -93,3 +93,6 @@ __pycache__/
 
 # Local clang-tidy report
 clang_tidy_report.txt
+
+# Workspace files
+*.code-workspace

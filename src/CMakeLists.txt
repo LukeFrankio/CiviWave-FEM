@@ -5,6 +5,7 @@ add_library(cwf_core
 	physics/loads.cpp
 	physics/newmark.cpp
 	physics/solver.cpp
+	gpu/vulkan_context.cpp
 )
 
 target_include_directories(cwf_core
@@ -16,6 +17,8 @@ target_include_directories(cwf_core
 target_link_libraries(cwf_core
 	PUBLIC
 		yaml-cpp
+		Vulkan::Vulkan
+		VulkanMemoryAllocator
 )
 
 target_compile_features(cwf_core PUBLIC cxx_std_26)

@@ -156,13 +156,9 @@ if(BUILD_UI)
     endif()
 endif()
 
-# Optional Vulkan find (do not fail configure if missing; we will enforce later when gpu module lands)
-find_package(Vulkan 1.3 QUIET)
-if(Vulkan_FOUND)
-    message(STATUS "Vulkan found: ${Vulkan_VERSION}")
-else()
-    message(STATUS "Vulkan SDK not found at configure time (this is OK for Phase 2; will be required later)")
-endif()
+# Vulkan is now mandatory (Phase 5+ requires full GPU runtime)
+find_package(Vulkan 1.3 REQUIRED)
+message(STATUS "Vulkan found: ${Vulkan_VERSION}")
 
 # Placeholder for future subdirectories
 if(EXISTS "${CMAKE_SOURCE_DIR}/src/CMakeLists.txt")
