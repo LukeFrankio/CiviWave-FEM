@@ -1,7 +1,10 @@
 add_library(cwf_core
 	config/config.cpp
+	mesh/pack.cpp
 	mesh/mesh.cpp
 	mesh/preprocess.cpp
+	gpu/sharding.cpp
+	gpu/upload.cpp
 	physics/loads.cpp
 	physics/newmark.cpp
 	physics/solver.cpp
