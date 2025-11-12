@@ -5,6 +5,7 @@ add_library(cwf_core
 	mesh/preprocess.cpp
 	gpu/sharding.cpp
 	gpu/upload.cpp
+	gpu/pcg.cpp
 	physics/loads.cpp
 	physics/newmark.cpp
 	physics/solver.cpp

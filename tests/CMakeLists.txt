@@ -26,6 +26,7 @@ add_executable(cwf_core_tests
     preprocess_test.cpp
     physics_test.cpp
     pack_shard_upload_test.cpp
+    pcg_test.cpp
 )
 
 target_link_libraries(cwf_core_tests PRIVATE
