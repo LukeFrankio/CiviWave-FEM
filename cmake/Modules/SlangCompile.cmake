@@ -86,6 +86,22 @@ function(cw_slang_compile OUT_LIST)
     endif()
 
     set(_outputs)
+    set(_include_dirs)
+    foreach(src IN LISTS ARGN)
+        get_filename_component(_dir "${src}" DIRECTORY)
+        list(APPEND _include_dirs "${_dir}")
+    endforeach()
+    list(REMOVE_DUPLICATES _include_dirs)
+
+    set(_include_args)
+    foreach(_idir IN LISTS _include_dirs)
+        list(APPEND _include_args -I "${_idir}")
+    endforeach()
+
+    if(_slangc)
+        message(STATUS "Slang include paths: ${_include_dirs}")
+    endif()
+
     foreach(src IN LISTS ARGN)
         get_filename_component(_name "${src}" NAME_WE)
         set(_out "${CMAKE_BINARY_DIR}/shaders/${_name}.spv")
@@ -93,7 +109,7 @@ function(cw_slang_compile OUT_LIST)
         if(_slangc)
             add_custom_command(
                 OUTPUT "${_out}"
-                COMMAND ${_slangc} -target spirv -profile glsl_460 -o "${_out}" "${src}"
+                COMMAND ${_slangc} -target spirv -profile cs_6_5 ${_include_args} -o "${_out}" "${src}"
                 DEPENDS "${src}"
                 VERBATIM
                 COMMENT "Compiling Slang -> SPIR-V: ${src}"

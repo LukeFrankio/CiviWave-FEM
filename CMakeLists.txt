@@ -119,11 +119,36 @@ else()
 endif()
 
 # Slang (compiler + runtime)
-# Note: We no longer fetch and build Slang from source by default. Instead, we
-# prefer a prebuilt `slangc` tool that is either on PATH or specified via the
-# SLANGC environment variable. Building Slang from source is platform-heavy
-# (MSVC-friendly) and can pull many submodules and external downloads.
+# We prefer using a prebuilt `slangc` binary when available, but provide an
+# opt-in FetchContent path so developers can build Slang from source when
+# necessary (e.g., CI environments without prebuilt tools).
+set(SLANG_VERSION_TAG v2025.18)
 message(STATUS "Slang integration: prefer prebuilt 'slangc' tool. Ensure 'slangc' is on PATH or set SLANGC environment variable to its path.")
+
+if(FETCH_SLANG)
+    message(STATUS "FETCH_SLANG=ON: Fetching Slang ${SLANG_VERSION_TAG}")
+    # Tweak Slang options to keep the build lightweight while still producing
+    # the slangc executable we rely on for shader compilation.
+    set(SLANG_ENABLE_TESTS OFF CACHE BOOL "Disable Slang tests" FORCE)
+    set(SLANG_ENABLE_EXAMPLES OFF CACHE BOOL "Disable Slang examples" FORCE)
+    set(SLANG_ENABLE_DOCUMENTATION OFF CACHE BOOL "Disable Slang docs" FORCE)
+    set(SLANG_ENABLE_GFX OFF CACHE BOOL "Disable Slang gfx layer" FORCE)
+    set(SLANG_ENABLE_RHI OFF CACHE BOOL "Disable Slang RHI" FORCE)
+    set(SLANG_ENABLE_NVAPI OFF CACHE BOOL "Disable Slang NVAPI integration" FORCE)
+    set(SLANG_ENABLE_DXIL OFF CACHE BOOL "Disable Slang DXIL backend" FORCE)
+    set(SLANG_ENABLE_OPTIX OFF CACHE BOOL "Disable Slang OptiX backend" FORCE)
+    set(SLANG_ENABLE_CUDA OFF CACHE BOOL "Disable Slang CUDA backend" FORCE)
+    set(SLANG_ENABLE_SLANGRT OFF CACHE BOOL "Disable SlangRT" FORCE)
+    set(SLANG_EMBED_STD_LIB ON CACHE BOOL "Embed Slang stdlib for standalone slangc" FORCE)
+
+    FetchContent_Declare(
+        slang
+        GIT_REPOSITORY https://github.com/shader-slang/slang.git
+        GIT_TAG ${SLANG_VERSION_TAG}
+        GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(slang)
+endif()
 
 # Optional: Tracy and ImGui can be added later via FetchContent (not required for Phase 2)
 if(ENABLE_TRACY)
