@@ -1,5 +1,14 @@
 #include "common.slang"
 
+//=============================================================================
+// @file newmark_update.slang
+// @brief corrector stage that folds Δu back into u/v/a with pure Newmark vibes
+//
+// consumes the predictor outputs + PCG correction vector, then reconstructs the
+// final displacement, velocity, and acceleration fields. coefficients are fed
+// via cbuffers so the math stays synced with the CPU reference integrator.
+//=============================================================================
+
 #if defined(__SLANG__)
 [[vk::binding(0, CWF_DESCRIPTOR_SET_READ_ONLY)]]
 #endif
@@ -30,12 +39,15 @@ RWStructuredBuffer<float3> UpdatedAcceleration : register(u2, space2);
 #endif
 cbuffer UpdateParams : register(b3, space0)
 {
-    float updateA0;
-    float updateA1;
-    float updateA2;
-    float paddingUpdate;
+    float gammaOverBetaDt; ///< γ / (β Δt)
+    float invBetaDt2;      ///< 1 / (β Δt^2)
+    float paddingUpdate0;
+    float paddingUpdate1;
 }
 
+/**
+ * @brief corrector kernel a.k.a u/v/a reunion tour
+ */
 [shader("compute")]
 [numthreads(kWaveSize, 1, 1)]
 CWF_REQUIRE_SUBGROUP_SIZE
@@ -43,19 +55,19 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
 {
     CWF_GUARD_SUBGROUP_SIZE();
 
-    uint idx = dispatchThreadID.x;
+    const uint idx = dispatchThreadID.x;
     if(!cwf_index_in_range(idx, nodeCount))
     {
         return;
     }
 
-    float3 delta = Correction[idx];
-    float3 uPred = PredictedDisplacement[idx];
-    float3 vPred = PredictedVelocity[idx];
+    const float3 delta = Correction[idx];
+    const float3 uPred = PredictedDisplacement[idx];
+    const float3 vPred = PredictedVelocity[idx];
 
-    float3 uNew = uPred + delta;
-    float3 vNew = vPred + updateA0 * delta;
-    float3 aNew = updateA1 * delta + updateA2 * vNew;
+    const float3 uNew = uPred + delta;
+    const float3 aNew = invBetaDt2 * delta;
+    const float3 vNew = vPred + gammaOverBetaDt * delta;
 
     UpdatedDisplacement[idx] = uNew;
     UpdatedVelocity[idx] = vNew;

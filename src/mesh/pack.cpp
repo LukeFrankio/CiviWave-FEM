@@ -218,6 +218,7 @@ auto build_packed_buffers(const mesh::Mesh &mesh, const mesh::pre::Outputs &prep
     buffers.solver.Ap.assign(dof_count, 0.0F);
     buffers.solver.z.assign(dof_count, 0.0F);
     buffers.solver.x.assign(dof_count, 0.0F);
+    buffers.solver.block_inverse.assign(node_count * 9U, 0.0F);
 
     const std::size_t reduction_block = std::max<std::size_t>(1U, params.reduction_block_size);
     const std::size_t partial_count = std::max<std::size_t>(1U, (dof_count + reduction_block - 1U) / reduction_block);

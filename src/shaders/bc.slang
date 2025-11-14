@@ -27,4 +27,21 @@ inline float3 cwf_apply_dirichlet(float3 value, DirichletInfo bc)
     return value;
 }
 
+inline float3 cwf_zero_dirichlet(float3 value, uint mask)
+{
+    if((mask & 0x1u) != 0u)
+    {
+        value.x = 0.0;
+    }
+    if((mask & 0x2u) != 0u)
+    {
+        value.y = 0.0;
+    }
+    if((mask & 0x4u) != 0u)
+    {
+        value.z = 0.0;
+    }
+    return value;
+}
+
 #endif // CWF_BC_SLANG

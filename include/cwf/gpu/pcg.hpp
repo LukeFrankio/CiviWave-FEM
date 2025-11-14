@@ -211,4 +211,19 @@ struct PcgTelemetry
                              const PcgSettings &settings, PcgVectors vectors, MatrixFreeWorkspace &workspace)
     -> std::expected<PcgTelemetry, PcgError>;
 
+/**
+ * @brief precomputes the block-jacobi inverse for every node and writes it into the supplied span
+ *
+ * ✨ PURE FUNCTION ✨ (with respect to arguments) — allocates no global state and only mutates
+ * the provided workspace and output buffer. useful when the caller needs to mirror the CPU-side
+ * block preconditioner on the GPU without duplicating the math.
+ *
+ * @param[in] system matrix-free metadata describing the assembled stiffness/mass contributions
+ * @param[in,out] workspace reusable scratch buffers (resized as required)
+ * @param[out] out_inverse destination span (length must be node_count * 9 floats, row major)
+ * @return success or contextual @ref PcgError uwu
+ */
+[[nodiscard]] auto build_block_jacobi_inverse(const MatrixFreeSystem &system, MatrixFreeWorkspace &workspace,
+                                              std::span<float> out_inverse) -> std::expected<void, PcgError>;
+
 } // namespace cwf::gpu::pcg

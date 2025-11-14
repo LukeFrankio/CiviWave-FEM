@@ -313,6 +313,46 @@ TEST(NewmarkEffectiveRhs, BuildsConsistentForceVector)
     }
 }
 
+TEST(NewmarkPredictor, MatchesAnalyticalForms)
+{
+    const auto coeffs = cwf::physics::newmark::make_coefficients(0.02, 0.25, 0.5);
+
+    cwf::physics::newmark::State state{};
+    state.displacement = {0.1, -0.2, 0.3};
+    state.velocity = {0.05, -0.04, 0.02};
+    state.acceleration = {0.3, -0.6, 0.9};
+
+    const auto predicted = cwf::physics::newmark::predict_state(coeffs, state);
+    ASSERT_EQ(predicted.displacement.size(), state.displacement.size());
+    ASSERT_EQ(predicted.velocity.size(), state.velocity.size());
+
+    const double dt = coeffs.dt;
+    const double dt_sq = dt * dt;
+    const double disp_factor = 0.5 - coeffs.beta;
+    const double vel_factor = 1.0 - coeffs.gamma;
+
+    for (std::size_t i = 0; i < state.displacement.size(); ++i)
+    {
+        const double expected_u = state.displacement[i] + dt * state.velocity[i] +
+                                  dt_sq * disp_factor * state.acceleration[i];
+        const double expected_v = state.velocity[i] + dt * vel_factor * state.acceleration[i];
+        EXPECT_NEAR(predicted.displacement[i], expected_u, kEpsilon);
+        EXPECT_NEAR(predicted.velocity[i], expected_v, kEpsilon);
+    }
+}
+
+TEST(NewmarkUpdateScalars, AlignWithClosedFormExpressions)
+{
+    const auto coeffs = cwf::physics::newmark::make_coefficients(0.01, 0.25, 0.5);
+    const auto scalars = cwf::physics::newmark::compute_update_scalars(coeffs);
+
+    const double expected_inv_beta_dt2 = 1.0 / (coeffs.beta * coeffs.dt * coeffs.dt);
+    const double expected_gamma_over_beta_dt = coeffs.gamma / (coeffs.beta * coeffs.dt);
+
+    EXPECT_NEAR(scalars.inv_beta_dt2, expected_inv_beta_dt2, kEpsilon);
+    EXPECT_NEAR(scalars.gamma_over_beta_dt, expected_gamma_over_beta_dt, kEpsilon);
+}
+
 TEST(NewmarkUpdate, ProducesConsistentKinematics)
 {
     const auto                   coeffs = cwf::physics::newmark::make_coefficients(0.1, 0.25, 0.5);

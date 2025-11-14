@@ -136,6 +136,7 @@ struct SolverBuffers
     std::vector<float> z;   ///< preconditioned residual (FP32)
     std::vector<float> x;   ///< solution accumulator / delta-u (FP32)
     std::vector<double> partials; ///< FP64 reduction partial sums (per workgroup)
+    std::vector<float> block_inverse; ///< cached block-jacobi inverse (3x3 per node, row-major)
 };
 
 /**

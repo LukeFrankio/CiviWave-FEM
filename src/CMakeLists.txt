@@ -5,6 +5,9 @@ add_library(cwf_core
 	mesh/preprocess.cpp
 	gpu/sharding.cpp
 	gpu/upload.cpp
+	gpu/buffers.cpp
+	gpu/device_buffers.cpp
+	gpu/newmark_stepper.cpp
 	gpu/pcg.cpp
 	physics/loads.cpp
 	physics/newmark.cpp
@@ -19,6 +22,7 @@ set(CWF_SHADER_SOURCES
 	${CMAKE_SOURCE_DIR}/src/shaders/pcg_axpy.slang
 	${CMAKE_SOURCE_DIR}/src/shaders/pcg_dot_partials.slang
 	${CMAKE_SOURCE_DIR}/src/shaders/pcg_reduce_final.slang
+	${CMAKE_SOURCE_DIR}/src/shaders/pcg_enforce_dirichlet.slang
 	${CMAKE_SOURCE_DIR}/src/shaders/newmark_predictor.slang
 	${CMAKE_SOURCE_DIR}/src/shaders/newmark_update.slang
 	${CMAKE_SOURCE_DIR}/src/shaders/derive_fields.slang
@@ -48,6 +52,8 @@ target_link_libraries(cwf_core
 		yaml-cpp
 		Vulkan::Vulkan
 		VulkanMemoryAllocator
+		# std::print/std::stacktrace (C++23 experimental goodness) live in libstdc++exp on MinGW 🎯
+		$<$<AND:$<CXX_COMPILER_ID:GNU>,$<BOOL:${WIN32}>>:stdc++exp>
 )
 
 target_compile_features(cwf_core PUBLIC cxx_std_26)

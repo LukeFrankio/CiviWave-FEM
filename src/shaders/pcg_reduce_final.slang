@@ -28,16 +28,15 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
 {
     CWF_GUARD_SUBGROUP_SIZE();
 
-    if(dispatchThreadID.x != 0u)
-    {
-        return;
-    }
-
     double accumulator = 0.0;
-    for(uint i = 0u; i < partialCount; ++i)
+    for(uint i = dispatchThreadID.x; i < partialCount; i += kWaveSize)
     {
         accumulator += PartialDots[i];
     }
 
-    OutputDot[0] = cwf_reduce_sum(accumulator);
+    const double reduced = cwf_reduce_sum(accumulator);
+    if(WaveGetLaneIndex() == 0u)
+    {
+        OutputDot[0] = reduced;
+    }
 }

@@ -476,6 +476,32 @@ void enforce_dirichlet_solution(const MatrixFreeSystem &system, std::span<const 
 
 } // namespace
 
+auto build_block_jacobi_inverse(const MatrixFreeSystem &system, MatrixFreeWorkspace &workspace,
+                                std::span<float> out_inverse) -> std::expected<void, PcgError>
+{
+    const auto required = system.node_count * 9U;
+    if (out_inverse.size() < required)
+    {
+        return std::unexpected(make_error("block inverse span too small",
+                                          {"required=" + std::to_string(required),
+                                           "available=" + std::to_string(out_inverse.size())}));
+    }
+
+    if (auto ensured = ensure_workspace(workspace, system); !ensured)
+    {
+        return ensured;
+    }
+
+    if (auto prepared = prepare_block_jacobi(system, workspace); !prepared)
+    {
+        return prepared;
+    }
+
+    auto inverse = block_inverse_view(workspace, system);
+    std::copy_n(inverse.begin(), required, out_inverse.begin());
+    return {};
+}
+
 [[nodiscard]] auto apply_keff(const MatrixFreeSystem &system, std::span<const float> input,
                               std::span<float> output, MatrixFreeWorkspace &workspace)
     -> std::expected<void, PcgError>
