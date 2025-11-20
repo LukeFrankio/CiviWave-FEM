@@ -4,6 +4,7 @@
 
 # CMake build directories and caches
 /build/
+/build-ui/
 /out/
 /dist/
 CMakeFiles/

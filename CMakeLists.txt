@@ -91,6 +91,10 @@ include(FormatAndTidy OPTIONAL)
 # FetchContent setup
 include(FetchContent)
 
+# Vulkan is now mandatory (Phase 5+ requires full GPU runtime)
+find_package(Vulkan 1.3 REQUIRED)
+message(STATUS "Vulkan found: ${Vulkan_VERSION}")
+
 # Export compile commands to allow clang-tidy to run
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -167,23 +171,34 @@ if(ENABLE_TRACY)
 endif()
 
 if(BUILD_UI)
-    message(STATUS "BUILD_UI=ON: Fetching ImGui via FetchContent")
+    message(STATUS "BUILD_UI=ON: Fetching ImGui + GLFW for optional viewer")
+    FetchContent_Declare(
+        glfw
+        GIT_REPOSITORY https://github.com/glfw/glfw.git
+        GIT_TAG 3.4
+        GIT_SHALLOW TRUE
+    )
     FetchContent_Declare(
         imgui_src
         GIT_REPOSITORY https://github.com/ocornut/imgui.git
-        GIT_TAG master
+        GIT_TAG docking
         GIT_SHALLOW TRUE
     )
-    FetchContent_MakeAvailable(imgui_src)
+    FetchContent_MakeAvailable(glfw imgui_src)
     if(DEFINED imgui_src_SOURCE_DIR)
-        add_library(imgui_interface INTERFACE)
-        target_include_directories(imgui_interface INTERFACE "${imgui_src_SOURCE_DIR}")
+        add_library(imgui STATIC
+            ${imgui_src_SOURCE_DIR}/imgui.cpp
+            ${imgui_src_SOURCE_DIR}/imgui_demo.cpp
+            ${imgui_src_SOURCE_DIR}/imgui_draw.cpp
+            ${imgui_src_SOURCE_DIR}/imgui_tables.cpp
+            ${imgui_src_SOURCE_DIR}/imgui_widgets.cpp
+            ${imgui_src_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+            ${imgui_src_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp
+        )
+        target_include_directories(imgui PUBLIC "${imgui_src_SOURCE_DIR}" "${imgui_src_SOURCE_DIR}/backends" ${Vulkan_INCLUDE_DIRS})
+        target_link_libraries(imgui PUBLIC glfw Vulkan::Vulkan)
     endif()
 endif()
-
-# Vulkan is now mandatory (Phase 5+ requires full GPU runtime)
-find_package(Vulkan 1.3 REQUIRED)
-message(STATUS "Vulkan found: ${Vulkan_VERSION}")
 
 # Placeholder for future subdirectories
 if(EXISTS "${CMAKE_SOURCE_DIR}/src/CMakeLists.txt")

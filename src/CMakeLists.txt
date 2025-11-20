@@ -12,8 +12,16 @@ add_library(cwf_core
 	physics/loads.cpp
 	physics/newmark.cpp
 	physics/solver.cpp
+	post/derived_fields.cpp
+	post/vtu_writer.cpp
+	post/probe_logger.cpp
+	post/output_manager.cpp
 	gpu/vulkan_context.cpp
 )
+
+if(BUILD_UI)
+    target_sources(cwf_core PRIVATE ui/viewer.cpp)
+endif()
 
 set(CWF_SHADER_SOURCES
 	${CMAKE_SOURCE_DIR}/src/shaders/ke_apply_element.slang
@@ -55,5 +63,27 @@ target_link_libraries(cwf_core
 		# std::print/std::stacktrace (C++23 experimental goodness) live in libstdc++exp on MinGW 🎯
 		$<$<AND:$<CXX_COMPILER_ID:GNU>,$<BOOL:${WIN32}>>:stdc++exp>
 )
+
+if(BUILD_UI)
+	target_link_libraries(cwf_core PUBLIC imgui glfw)
+	if(WIN32)
+		target_link_libraries(cwf_core PUBLIC opengl32)
+	endif()
+
+	add_executable(cwf_viewer_demo ui/viewer_demo.cpp)
+	target_link_libraries(cwf_viewer_demo PRIVATE cwf_core)
+	target_compile_features(cwf_viewer_demo PRIVATE cxx_std_26)
+
+	set(CWF_VIEWER_VERT ${CMAKE_SOURCE_DIR}/src/shaders/viewer_mesh_vert.slang)
+	set(CWF_VIEWER_FRAG ${CMAKE_SOURCE_DIR}/src/shaders/viewer_mesh_frag.slang)
+	cw_slang_compile(CWF_VIEWER_VERT_SPV PROFILE vs_6_5 TARGET viewer_shaders ${CWF_VIEWER_VERT})
+	cw_slang_compile(CWF_VIEWER_FRAG_SPV PROFILE ps_6_5 TARGET viewer_shaders ${CWF_VIEWER_FRAG})
+	set_source_files_properties(${CWF_VIEWER_VERT} ${CWF_VIEWER_FRAG} PROPERTIES HEADER_FILE_ONLY TRUE)
+	target_sources(cwf_core PRIVATE ${CWF_VIEWER_VERT} ${CWF_VIEWER_FRAG})
+	add_dependencies(cwf_core viewer_shaders)
+endif()
+
+target_compile_definitions(cwf_core PUBLIC CWF_ENABLE_UI=$<BOOL:${BUILD_UI}>)
+target_compile_definitions(cwf_core PUBLIC CWF_SHADER_BUILD_DIR="${CMAKE_BINARY_DIR}/shaders")
 
 target_compile_features(cwf_core PUBLIC cxx_std_26)

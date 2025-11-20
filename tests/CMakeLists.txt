@@ -25,6 +25,8 @@ add_executable(cwf_core_tests
     mesh_loader_test.cpp
     preprocess_test.cpp
     physics_test.cpp
+    derived_fields_test.cpp
+    export_writer_test.cpp
     pack_shard_upload_test.cpp
     pcg_test.cpp
     newmark_stepper_test.cpp

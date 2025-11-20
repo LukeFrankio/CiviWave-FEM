@@ -211,10 +211,15 @@ struct MaterialBinding
         }
         const auto group_id = name_to_group.at(fix.group);
         const auto surf_it  = mesh.surface_groups.find(group_id);
-        if (surf_it == mesh.surface_groups.end() || surf_it->second.empty())
+        const auto node_it  = mesh.node_groups.find(group_id);
+        
+        const bool has_surfaces = (surf_it != mesh.surface_groups.end() && !surf_it->second.empty());
+        const bool has_nodes    = (node_it != mesh.node_groups.end() && !node_it->second.empty());
+
+        if (!has_surfaces && !has_nodes)
         {
             return std::unexpected(
-                PreprocessError{std::format("dirichlet group '{}' lacks surface elements", fix.group),
+                PreprocessError{std::format("dirichlet group '{}' has no discretized faces or nodes", fix.group),
                                 {"dirichlet", "fixes", std::format("[{}]", i)}});
         }
     }

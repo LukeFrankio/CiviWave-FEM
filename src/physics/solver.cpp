@@ -89,24 +89,36 @@ namespace
     return Ke;
 }
 
-[[nodiscard]] auto gather_surface_nodes(const mesh::Mesh &mesh, std::uint32_t group_id)
+[[nodiscard]] auto gather_group_nodes(const mesh::Mesh &mesh, std::uint32_t group_id)
     -> std::unordered_set<std::uint32_t>
 {
     std::unordered_set<std::uint32_t> nodes;
-    const auto                        surf_iter = mesh.surface_groups.find(group_id);
-    if (surf_iter == mesh.surface_groups.end())
+    
+    // Collect from surfaces
+    const auto surf_iter = mesh.surface_groups.find(group_id);
+    if (surf_iter != mesh.surface_groups.end())
     {
-        return nodes;
-    }
-    for (const auto surface_index : surf_iter->second)
-    {
-        const auto &surface = mesh.surfaces.at(surface_index);
-        const auto  limit   = surface.geometry == mesh::SurfaceGeometry::Quadrilateral4 ? 4U : 3U;
-        for (std::size_t i = 0; i < limit; ++i)
+        for (const auto surface_index : surf_iter->second)
         {
-            nodes.insert(surface.nodes[i]);
+            const auto &surface = mesh.surfaces.at(surface_index);
+            const auto  limit   = surface.geometry == mesh::SurfaceGeometry::Quadrilateral4 ? 4U : 3U;
+            for (std::size_t i = 0; i < limit; ++i)
+            {
+                nodes.insert(surface.nodes[i]);
+            }
         }
     }
+
+    // Collect from node groups
+    const auto node_iter = mesh.node_groups.find(group_id);
+    if (node_iter != mesh.node_groups.end())
+    {
+        for (const auto node_index : node_iter->second)
+        {
+            nodes.insert(node_index);
+        }
+    }
+
     return nodes;
 }
 
@@ -314,7 +326,7 @@ auto build_dirichlet_conditions(const mesh::Mesh &mesh, const config::Config &cf
         {
             continue;
         }
-        const auto nodes = gather_surface_nodes(mesh, group_iter->second);
+        const auto nodes = gather_group_nodes(mesh, group_iter->second);
         for (const auto node : nodes)
         {
             for (std::size_t axis = 0; axis < 3U; ++axis)
