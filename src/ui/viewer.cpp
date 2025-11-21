@@ -23,18 +23,24 @@
 #include <expected>
 #include <filesystem>
 #include <format>
-#include <print>
 #include <fstream>
 #include <limits>
+#include <memory>
 #include <numbers>
 #include <optional>
+#include <print>
 #include <ranges>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unordered_set>
 #include <utility>
 #include <vector>
+
+#include "cwf/gpu/device_buffers.hpp"
+#include "cwf/gpu/newmark_stepper.hpp"
+#include "cwf/gpu/vulkan_context.hpp"
 
 namespace cwf::ui
 {
@@ -118,6 +124,7 @@ struct MeshBuffers
     std::vector<Vec4>            rest_positions;
     std::vector<Vec4>            deformed_positions;
     bool                         has_deformation{false};
+    float                        base_load_newtons{0.0F};
 };
 
 [[nodiscard]] constexpr auto lerp(float a, float b, float t) noexcept -> float
@@ -158,6 +165,199 @@ struct MeshBuffers
     }
     return scale(v, 1.0F / len);
 }
+
+[[nodiscard]] auto to_viewer_error(const cwf::gpu::VulkanError &error, std::string_view scope) -> ViewerError
+{
+    ViewerError viewer{};
+    viewer.message = std::format("{} (vkResult={})", error.message, static_cast<int>(error.result));
+    viewer.context = error.context;
+    viewer.context.emplace_back(scope);
+    return viewer;
+}
+
+[[nodiscard]] auto to_viewer_error(const cwf::gpu::newmark::StepError &error, std::string_view scope) -> ViewerError
+{
+    ViewerError viewer{};
+    viewer.message = error.message;
+    viewer.context = error.context;
+    viewer.context.emplace_back(scope);
+    return viewer;
+}
+
+class SimulationBackend : public std::enable_shared_from_this<SimulationBackend>
+{
+public:
+    struct StressVectorRequest
+    {
+        bool        enabled{false};
+        std::size_t anchor{0U};
+        Vec3        direction{};
+        float       magnitude_newtons{0.0F};
+    };
+
+    static auto create(mesh::pack::PackingResult packing,
+                       post::DerivedFieldSet derived,
+                       std::vector<physics::materials::ElasticProperties> materials,
+                       config::SolverSettings solver_settings,
+                       config::TimeSettings time_settings,
+                       physics::materials::RayleighCoefficients rayleigh,
+                       double simulation_time,
+                       std::filesystem::path shader_directory)
+        -> std::expected<std::shared_ptr<SimulationBackend>, ViewerError>
+    {
+        auto backend = std::shared_ptr<SimulationBackend>(new SimulationBackend());
+        backend->pack_              = std::move(packing);
+        backend->derived_           = std::move(derived);
+        backend->materials_         = std::move(materials);
+        backend->solver_settings_   = solver_settings;
+        backend->time_settings_     = time_settings;
+        backend->rayleigh_          = rayleigh;
+        backend->simulation_time_   = simulation_time;
+        backend->shader_directory_  = std::move(shader_directory);
+        backend->capture_baseline_state();
+
+        auto context_expected = cwf::gpu::VulkanContext::create({});
+        if (!context_expected)
+        {
+            return std::unexpected(to_viewer_error(context_expected.error(), "vulkan_context"));
+        }
+        backend->context_ = std::move(context_expected.value());
+
+        auto arena_expected = cwf::gpu::DeviceBufferArena::create(backend->context_, backend->pack_, backend->materials_);
+        if (!arena_expected)
+        {
+            return std::unexpected(to_viewer_error(arena_expected.error(), "device_buffer_arena"));
+        }
+        backend->arena_ = std::move(arena_expected.value());
+
+        auto stepper = std::make_unique<cwf::gpu::newmark::Stepper>(backend->pack_,
+                                                                    std::span<const physics::materials::ElasticProperties>{backend->materials_},
+                                                                    backend->rayleigh_,
+                                                                    backend->solver_settings_,
+                                                                    backend->time_settings_);
+        if (auto status = stepper->enable_gpu(backend->context_, backend->arena_, backend->shader_directory_); !status)
+        {
+            return std::unexpected(to_viewer_error(status.error(), "stepper_enable_gpu"));
+        }
+        backend->stepper_ = std::move(stepper);
+        return backend;
+    }
+
+    [[nodiscard]] auto pack() -> mesh::pack::PackingResult & { return pack_; }
+    [[nodiscard]] auto pack() const -> const mesh::pack::PackingResult & { return pack_; }
+    [[nodiscard]] auto derived() const -> const post::DerivedFieldSet & { return derived_; }
+    [[nodiscard]] auto simulation_time() const noexcept -> double { return simulation_time_; }
+    [[nodiscard]] auto last_telemetry() const -> const std::optional<cwf::gpu::newmark::StepTelemetry> &
+    {
+        return last_telemetry_;
+    }
+
+    [[nodiscard]] auto solve(const StressVectorRequest &request, bool paused_mode)
+        -> std::expected<cwf::gpu::newmark::StepTelemetry, ViewerError>
+    {
+        if (!stepper_)
+        {
+            return std::unexpected(make_error("GPU stepper unavailable", {"simulation_backend"}));
+        }
+        restore_node_state();
+        restore_external_force();
+        if (request.enabled)
+        {
+            apply_custom_load(request);
+        }
+
+        auto telemetry = stepper_->step(simulation_time_, paused_mode);
+        if (!telemetry)
+        {
+            return std::unexpected(to_viewer_error(telemetry.error(), "gpu_newmark_step"));
+        }
+        simulation_time_ = telemetry->simulation_time + telemetry->time_step;
+        derived_          = post::compute_derived_fields(pack_, materials_);
+        last_telemetry_   = *telemetry;
+        return telemetry.value();
+    }
+
+private:
+    SimulationBackend() = default;
+
+    void capture_baseline_state()
+    {
+        baseline_displacement_ = pack_.buffers.nodes.displacement;
+        baseline_velocity_     = pack_.buffers.nodes.velocity;
+        baseline_acceleration_ = pack_.buffers.nodes.acceleration;
+        baseline_external_force_ = pack_.buffers.nodes.external_force;
+    }
+
+    void restore_node_state()
+    {
+        const auto copy_vec = [](const mesh::pack::Float3SoA &src, mesh::pack::Float3SoA &dst) {
+            if (src.x.size() != dst.x.size())
+            {
+                return;
+            }
+            std::copy(src.x.begin(), src.x.end(), dst.x.begin());
+            std::copy(src.y.begin(), src.y.end(), dst.y.begin());
+            std::copy(src.z.begin(), src.z.end(), dst.z.begin());
+        };
+        copy_vec(baseline_displacement_, pack_.buffers.nodes.displacement);
+        copy_vec(baseline_velocity_, pack_.buffers.nodes.velocity);
+        copy_vec(baseline_acceleration_, pack_.buffers.nodes.acceleration);
+    }
+
+    void restore_external_force()
+    {
+        if (baseline_external_force_.x.size() != pack_.buffers.nodes.external_force.x.size())
+        {
+            return;
+        }
+        std::copy(baseline_external_force_.x.begin(), baseline_external_force_.x.end(), pack_.buffers.nodes.external_force.x.begin());
+        std::copy(baseline_external_force_.y.begin(), baseline_external_force_.y.end(), pack_.buffers.nodes.external_force.y.begin());
+        std::copy(baseline_external_force_.z.begin(), baseline_external_force_.z.end(), pack_.buffers.nodes.external_force.z.begin());
+    }
+
+    void apply_custom_load(const StressVectorRequest &request)
+    {
+        auto &forces = pack_.buffers.nodes.external_force;
+        if (forces.x.empty())
+        {
+            return;
+        }
+        const std::size_t node = std::min(request.anchor, forces.x.size() - 1U);
+        Vec3 direction        = request.direction;
+        const float len       = length(direction);
+        if (len < 1.0e-6F)
+        {
+            direction = Vec3{0.0F, 0.0F, -1.0F};
+        }
+        else
+        {
+            direction = scale(direction, 1.0F / len);
+        }
+        const Vec3 load = scale(direction, request.magnitude_newtons);
+        forces.x[node] += load.x;
+        forces.y[node] += load.y;
+        forces.z[node] += load.z;
+    }
+
+    mesh::pack::PackingResult pack_{};
+    post::DerivedFieldSet    derived_{};
+    std::vector<physics::materials::ElasticProperties> materials_{};
+    config::SolverSettings   solver_settings_{};
+    config::TimeSettings     time_settings_{};
+    physics::materials::RayleighCoefficients rayleigh_{};
+    double simulation_time_{0.0};
+
+    mesh::pack::Float3SoA baseline_displacement_{};
+    mesh::pack::Float3SoA baseline_velocity_{};
+    mesh::pack::Float3SoA baseline_acceleration_{};
+    mesh::pack::Float3SoA baseline_external_force_{};
+
+    cwf::gpu::VulkanContext        context_{};
+    cwf::gpu::DeviceBufferArena    arena_{};
+    std::unique_ptr<cwf::gpu::newmark::Stepper> stepper_{};
+    std::optional<cwf::gpu::newmark::StepTelemetry> last_telemetry_{};
+    std::filesystem::path shader_directory_{};
+};
 
 struct Mat4
 {
@@ -320,10 +520,25 @@ struct CameraInput
         output.rest_bounds_max.x       = std::max(output.rest_bounds_max.x, rest_x);
         output.rest_bounds_max.y       = std::max(output.rest_bounds_max.y, rest_y);
         output.rest_bounds_max.z       = std::max(output.rest_bounds_max.z, rest_z);
-        deformation_present = deformation_present || (std::abs(disp_x) > 1.0e-6F || std::abs(disp_y) > 1.0e-6F ||
-                                                      std::abs(disp_z) > 1.0e-6F);
+        const float offset_abs = std::max({std::abs(disp_x), std::abs(disp_y), std::abs(disp_z)});
+        deformation_present    = deformation_present || (std::isfinite(offset_abs) &&
+                                  offset_abs > std::numeric_limits<float>::min());
     }
     output.has_deformation = deformation_present;
+
+    double total_load_newtons = 0.0;
+    for (std::size_t node = 0; node < node_count; ++node)
+    {
+        const double fx = static_cast<double>(packing.buffers.nodes.external_force.x[node]);
+        const double fy = static_cast<double>(packing.buffers.nodes.external_force.y[node]);
+        const double fz = static_cast<double>(packing.buffers.nodes.external_force.z[node]);
+        const double magnitude = std::sqrt((fx * fx) + (fy * fy) + (fz * fz));
+        if (std::isfinite(magnitude))
+        {
+            total_load_newtons += magnitude;
+        }
+    }
+    output.base_load_newtons = static_cast<float>(std::max(total_load_newtons, 0.0));
 
     // Correct winding for tetrahedrons (all faces pointing outwards)
     // Assuming node 3 is the "peak" and 0-1-2 is the base (CCW from outside)
@@ -502,7 +717,12 @@ struct QueueFamilyIndices
 class VulkanViewer
 {
 public:
-    VulkanViewer(GLFWwindow *window, MeshBuffers buffers, CameraState camera, double simulation_time);
+    VulkanViewer(GLFWwindow *window,
+                 const mesh::Mesh &source_mesh,
+                 MeshBuffers buffers,
+                 CameraState camera,
+                 double simulation_time,
+                 std::shared_ptr<SimulationBackend> backend);
     ~VulkanViewer();
 
     void run();
@@ -567,6 +787,13 @@ private:
     void set_stress_anchor(std::size_t vertex_index);
     void normalize_display_stress();
     void apply_deformation_scale(float weight);
+    void recompute_interactive_offsets();
+    void refresh_stress_reference_range();
+    [[nodiscard]] auto active_deformation_weight() const noexcept -> float;
+    void set_load_newtons(float newtons);
+    void initialize_mesh_state(bool reset_load_reference);
+    void mark_solver_dirty();
+    void process_simulation_requests();
 
     static void framebuffer_resize_callback(GLFWwindow *window, int width, int height);
     static void scroll_callback(GLFWwindow *window, double /*xoffset*/, double yoffset);
@@ -575,6 +802,7 @@ private:
     [[nodiscard]] auto stress_direction() const noexcept -> Vec3;
     [[nodiscard]] auto get_vertex_position(std::size_t index) const -> Vec3;
     [[nodiscard]] auto project_position(const Vec4 &position) const -> std::optional<ImVec2>;
+    [[nodiscard]] auto estimate_auto_falloff() const -> float;
 
     GLFWwindow *window_{};
     MeshBuffers mesh_{};
@@ -582,6 +810,11 @@ private:
     CameraState initial_camera_{};
     CameraInput camera_input_{};
     double simulation_time_{0.0};
+    const mesh::Mesh *source_mesh_{nullptr};
+    std::shared_ptr<SimulationBackend> backend_{};
+    bool pending_solver_update_{false};
+    std::optional<ViewerError> backend_error_{};
+    std::optional<cwf::gpu::newmark::StepTelemetry> backend_telemetry_{};
 
     VkInstance               instance_{VK_NULL_HANDLE};
     VkDebugUtilsMessengerEXT debug_messenger_{VK_NULL_HANDLE};
@@ -641,6 +874,9 @@ private:
     float                       deformation_scale_{1.0F};
     float                       current_deformation_weight_{1.0F};
     float                       max_deformation_offset_{0.0F};
+    float                       load_scale_{1.0F};
+    float                       base_load_reference_newtons_{1.0F};
+    float                       current_load_newtons_{1.0F};
     bool                        vertex_data_dirty_{false};
     VkDeviceSize                vertex_buffer_size_{0};
     Mat4                        current_view_matrix_{};
@@ -653,7 +889,7 @@ private:
     {
         bool         enabled{false};
         std::size_t  anchor_vertex{0};
-        float        magnitude{0.25F};
+        float        magnitude{1.0F};
         float        yaw{0.0F};
         float        pitch{0.0F};
         float        falloff{0.35F};
@@ -664,6 +900,9 @@ private:
     StressVectorState           stress_state_{};
     std::vector<float>          base_stress_{};
     std::vector<float>          display_stress_{};
+    float                       base_stress_min_{0.0F};
+    float                       base_stress_max_{1.0F};
+    float                       base_stress_reference_range_{1.0F};
     std::optional<std::size_t>  hovered_vertex_{};
     std::vector<ImVec2>         projected_vertices_{};
     std::vector<bool>           projected_visible_{};
@@ -677,6 +916,8 @@ private:
     bool                        show_hover_labels_{true};
     bool                        require_ctrl_for_selection_{true};
     bool                        selection_in_progress_{false};
+    std::vector<Vec3>           interactive_offsets_{};
+    float                       interactive_deformation_gain_{0.05F};
 };
 
 const std::vector<const char *> kValidationLayers = {"VK_LAYER_KHRONOS_validation"};
@@ -701,8 +942,19 @@ const std::vector<const char *> kDeviceExtensions  = {VK_KHR_SWAPCHAIN_EXTENSION
     return true;
 }
 
-VulkanViewer::VulkanViewer(GLFWwindow *window, MeshBuffers buffers, CameraState camera, double simulation_time)
-    : window_(window), mesh_(std::move(buffers)), camera_(camera), initial_camera_(camera), simulation_time_(simulation_time)
+VulkanViewer::VulkanViewer(GLFWwindow *window,
+                           const mesh::Mesh &source_mesh,
+                           MeshBuffers buffers,
+                           CameraState camera,
+                           double simulation_time,
+                           std::shared_ptr<SimulationBackend> backend)
+    : window_(window),
+      mesh_(std::move(buffers)),
+      camera_(camera),
+      initial_camera_(camera),
+      simulation_time_(simulation_time),
+      source_mesh_(&source_mesh),
+      backend_(std::move(backend))
 {
     shader_directory_ = std::filesystem::path{CWF_SHADER_BUILD_DIR};
     if (!std::filesystem::exists(shader_directory_))
@@ -721,68 +973,7 @@ VulkanViewer::VulkanViewer(GLFWwindow *window, MeshBuffers buffers, CameraState 
     log_viewer("viewer ctor: shader dir '{}', vertices {}, indices {}, rest extent ({:.3f}, {:.3f}, {:.3f}) deformed extent ({:.3f}, {:.3f}, {:.3f})",
                shader_directory_.string(), mesh_.vertices.size(), mesh_.indices.size(), rest_extent.x, rest_extent.y,
                rest_extent.z, def_extent.x, def_extent.y, def_extent.z);
-    base_stress_ = mesh_.stress_values;
-    if (base_stress_.size() < mesh_.vertices.size())
-    {
-        base_stress_.resize(mesh_.vertices.size(), 0.0F);
-    }
-    display_stress_ = base_stress_;
-    if (!mesh_.vertices.empty())
-    {
-        stress_state_.anchor_vertex = std::min(stress_state_.anchor_vertex, mesh_.vertices.size() - 1U);
-    }
-    projected_vertices_.resize(mesh_.vertices.size(), ImVec2{0.0F, 0.0F});
-    projected_visible_.resize(mesh_.vertices.size(), false);
-    apply_display_stress_to_vertices();
-    if (mesh_.has_deformation)
-    {
-        const bool rest_match = mesh_.rest_positions.size() == mesh_.vertices.size();
-        const bool def_match  = mesh_.deformed_positions.size() == mesh_.vertices.size();
-        if (rest_match && def_match)
-        {
-            deformation_offsets_.resize(mesh_.vertices.size());
-            float max_offset = 0.0F;
-            for (std::size_t i = 0; i < mesh_.vertices.size(); ++i)
-            {
-                const Vec4 &rest = mesh_.rest_positions[i];
-                const Vec4 &def  = mesh_.deformed_positions[i];
-                Vec3        offset{def.x - rest.x, def.y - rest.y, def.z - rest.z};
-                deformation_offsets_[i] = offset;
-                max_offset              = std::max(max_offset, length(offset));
-            }
-            current_deformation_weight_ = deformation_enabled_ ? deformation_scale_ : 0.0F;
-            log_viewer("viewer ctor: deformation offsets captured (max {:.6f} m)", max_offset);
-            max_deformation_offset_ = max_offset;
-            if (max_offset < 1.0e-6F)
-            {
-                mesh_.has_deformation      = false;
-                deformation_offsets_.clear();
-                deformation_enabled_       = false;
-                current_deformation_weight_ = 0.0F;
-                max_deformation_offset_    = 0.0F;
-            }
-            else if (!deformation_enabled_)
-            {
-                apply_deformation_scale(0.0F);
-            }
-        }
-        else
-        {
-            log_viewer("viewer ctor: deformation buffers mismatched (rest {}, deformed {}, vertices {}), disabling toggle",
-                       mesh_.rest_positions.size(), mesh_.deformed_positions.size(), mesh_.vertices.size());
-            mesh_.has_deformation = false;
-            deformation_enabled_  = false;
-            deformation_offsets_.clear();
-            current_deformation_weight_ = 0.0F;
-            max_deformation_offset_    = 0.0F;
-        }
-    }
-    else
-    {
-        deformation_enabled_        = false;
-        current_deformation_weight_ = 0.0F;
-        max_deformation_offset_     = 0.0F;
-    }
+    initialize_mesh_state(true);
 
     init_vulkan();
     refresh_camera_matrices();
@@ -909,9 +1100,14 @@ void VulkanViewer::run()
         {
             begin_imgui_frame();
             build_ui();
+            process_simulation_requests();
             render_overlays();
             ImGui::Render();
             draw_data = ImGui::GetDrawData();
+        }
+        else
+        {
+            process_simulation_requests();
         }
         draw_frame(draw_data);
 
@@ -2243,6 +2439,32 @@ void VulkanViewer::build_ui()
         ImGui::Text("Rest extent: (%.3f, %.3f, %.3f)", rest_extent.x, rest_extent.y, rest_extent.z);
         ImGui::Text("Deformed extent: (%.3f, %.3f, %.3f)", def_extent.x, def_extent.y, def_extent.z);
         ImGui::Separator();
+        if (backend_)
+        {
+            if (backend_error_)
+            {
+                ImGui::TextColored(ImVec4(1.0F, 0.35F, 0.35F, 1.0F), "GPU error: %s", backend_error_->message.c_str());
+            }
+            else if (backend_telemetry_)
+            {
+                ImGui::Text("GPU iterations: %zu", backend_telemetry_->pcg.iterations);
+                ImGui::Text("GPU residual: %.3e", backend_telemetry_->pcg.residual_norm);
+            }
+            else
+            {
+                ImGui::Text("GPU backend ready");
+            }
+            if (ImGui::Button("Run GPU Solve"))
+            {
+                mark_solver_dirty();
+            }
+        }
+        else
+        {
+            ImGui::TextDisabled("GPU backend unavailable");
+        }
+
+        ImGui::Separator();
         if (ImGui::Button("Reset Camera"))
         {
             reset_camera();
@@ -2260,14 +2482,33 @@ void VulkanViewer::build_ui()
                 }
                 ImGui::BeginDisabled(!deformation_enabled_);
                 float magnitude = deformation_scale_;
-                if (ImGui::SliderFloat("Deformation magnitude", &magnitude, 0.0F, 5.0F, "%.2fx"))
+                if (ImGui::SliderFloat("Deformation magnitude", &magnitude, 1.0e-6F, 1.0e6F, "%.3gx",
+                                         ImGuiSliderFlags_Logarithmic))
                 {
                     deformation_scale_ = magnitude;
-                    apply_deformation_scale(deformation_enabled_ ? deformation_scale_ : 0.0F);
+                    if (deformation_enabled_)
+                    {
+                        apply_deformation_scale(active_deformation_weight());
+                    }
                 }
-                ImGui::Text("Max solver displacement: %.4f m", max_deformation_offset_);
-                ImGui::Text("Current weight: %.2fx", deformation_enabled_ ? deformation_scale_ : 0.0F);
+                ImGui::SameLine();
+                if (ImGui::Button("Reset##deformation_scale"))
+                {
+                    deformation_scale_ = 1.0F;
+                    if (deformation_enabled_)
+                    {
+                        apply_deformation_scale(active_deformation_weight());
+                    }
+                }
+                ImGui::Text("Max solver displacement: %.6e m", max_deformation_offset_);
+                const float displayed_weight = deformation_enabled_ ? active_deformation_weight() : 0.0F;
+                ImGui::Text("Displayed max: %.6e m", max_deformation_offset_ * displayed_weight);
+                ImGui::Text("Current weight (load * magnitude): %.3gx", displayed_weight);
                 ImGui::EndDisabled();
+                if (max_deformation_offset_ < 1.0e-6F)
+                {
+                    ImGui::TextDisabled("Solver offsets are below 1e-6 m; bump the magnitude slider to exaggerate them.");
+                }
             }
         }
         else
@@ -2300,11 +2541,18 @@ void VulkanViewer::build_ui()
         ImGui::Separator();
         if (ImGui::CollapsingHeader("Stress Vector Controls", ImGuiTreeNodeFlags_DefaultOpen))
         {
+            const auto refresh_interactive_effects = [this]() {
+                recompute_interactive_offsets();
+                const float active_weight = deformation_enabled_ ? active_deformation_weight() : 0.0F;
+                apply_deformation_scale(active_weight);
+            };
             bool enabled = stress_state_.enabled;
             if (ImGui::Checkbox("Enable custom stress", &enabled))
             {
                 stress_state_.enabled = enabled;
                 recompute_display_stress();
+                refresh_interactive_effects();
+                mark_solver_dirty();
             }
             ImGui::Text("Anchor vertex: %zu", stress_state_.anchor_vertex);
             if (hovered_vertex_.has_value())
@@ -2315,34 +2563,54 @@ void VulkanViewer::build_ui()
             {
                 // no-op, draw flag toggled via checkbox
             }
-            float magnitude = stress_state_.magnitude;
-            if (ImGui::SliderFloat("Stress magnitude", &magnitude, 0.0F, 2.0F, "%.2f"))
+            const auto sanitize_positive = [](float value, float fallback) {
+                constexpr float kUpper = std::numeric_limits<float>::max() * 0.25F;
+                if (!std::isfinite(value) || value <= 0.0F)
+                {
+                    return fallback;
+                }
+                return std::min(value, kUpper);
+            };
+            float load_slider = std::max(current_load_newtons_, 1.0e-6F);
+            float slider_min = sanitize_positive(base_load_reference_newtons_ * 1.0e-3F, 1.0e-6F);
+            slider_min = std::max(slider_min, 1.0e-6F);
+            float slider_max = sanitize_positive(base_load_reference_newtons_ * 1.0e6F, slider_min * 10.0F);
+            slider_max = std::max(slider_max, slider_min * 10.0F);
+            if (ImGui::SliderFloat("Applied load (N)", &load_slider, slider_min, slider_max, "%.3eN",
+                                     ImGuiSliderFlags_Logarithmic))
             {
-                stress_state_.magnitude = magnitude;
-                recompute_display_stress();
+                set_load_newtons(load_slider);
             }
+            ImGui::SameLine();
+            if (ImGui::Button("Zero load"))
+            {
+                set_load_newtons(0.0F);
+            }
+            ImGui::Text("Load multiplier vs solver: %.3gx", load_scale_);
+            ImGui::Text("Reference load: %.3e N", base_load_reference_newtons_);
             float yaw_degrees = stress_state_.yaw * (180.0F / kPiF);
             if (ImGui::SliderFloat("Yaw (deg)", &yaw_degrees, -180.0F, 180.0F, "%.1f"))
             {
                 stress_state_.yaw = yaw_degrees * (kPiF / 180.0F);
                 recompute_display_stress();
+                refresh_interactive_effects();
+                mark_solver_dirty();
             }
             float pitch_degrees = stress_state_.pitch * (180.0F / kPiF);
             if (ImGui::SliderFloat("Pitch (deg)", &pitch_degrees, -85.0F, 85.0F, "%.1f"))
             {
                 stress_state_.pitch = pitch_degrees * (kPiF / 180.0F);
                 recompute_display_stress();
+                refresh_interactive_effects();
+                mark_solver_dirty();
             }
-            if (ImGui::SliderFloat("Falloff", &stress_state_.falloff, 0.05F, 2.0F, "%.2f"))
-            {
-                recompute_display_stress();
-            }
+            ImGui::Text("Auto falloff (derived): %.3f 1/m", stress_state_.falloff);
             ImGui::SliderFloat("Arrow length", &stress_state_.arrow_length, 0.1F, 10.0F, "%.2f");
             if (ImGui::Button("Reset Stress Field"))
             {
                 stress_state_.enabled = false;
-                display_stress_       = base_stress_;
-                apply_display_stress_to_vertices();
+                set_load_newtons(base_load_reference_newtons_);
+                refresh_interactive_effects();
             }
             ImGui::TextWrapped("Hold Ctrl + Left Click on a highlighted vertex to move the stress vector anchor.");
         }
@@ -2415,7 +2683,7 @@ void VulkanViewer::set_deformation_enabled(bool enabled)
         return;
     }
     deformation_enabled_ = enabled;
-    const float target_scale = enabled ? deformation_scale_ : 0.0F;
+    const float target_scale = enabled ? active_deformation_weight() : 0.0F;
     apply_deformation_scale(target_scale);
     log_viewer("set_deformation_enabled: now showing {} geometry (scale {:.3f})", enabled ? "deformed" : "rest", target_scale);
 }
@@ -2669,7 +2937,12 @@ void VulkanViewer::render_overlays()
 }
 
 /**
- * @brief recomputes the synthetic per-vertex stress field based on the UI sliders
+ * @brief rebuilds the stress visualization from solver output plus optional directional bias
+ *
+ * copies the solver-provided von-Mises field, applies the magnitude scale slider, and injects an
+ * exponentially decaying directional contribution when the custom vector is enabled. the decay
+ * constant is derived from local stress gradients so the UI stays grounded in the existing physics
+ * solution instead of arbitrary knobs.
  */
 void VulkanViewer::recompute_display_stress()
 {
@@ -2678,6 +2951,21 @@ void VulkanViewer::recompute_display_stress()
         return;
     }
     display_stress_ = base_stress_;
+    if (stress_state_.magnitude != 1.0F)
+    {
+        for (std::size_t i = 0; i < display_stress_.size(); ++i)
+        {
+            if (!std::isfinite(display_stress_[i]))
+            {
+                display_stress_[i] = 0.0F;
+                continue;
+            }
+            display_stress_[i] *= stress_state_.magnitude;
+        }
+    }
+
+    stress_state_.falloff = estimate_auto_falloff();
+
     if (!stress_state_.enabled || mesh_.vertices.empty() || stress_state_.anchor_vertex >= display_stress_.size())
     {
         apply_display_stress_to_vertices();
@@ -2686,14 +2974,15 @@ void VulkanViewer::recompute_display_stress()
 
     const Vec3 anchor_position = get_vertex_position(stress_state_.anchor_vertex);
     const Vec3 direction       = stress_direction();
+    const float reference_scale = std::max(base_stress_reference_range_, 1.0F);
     for (std::size_t i = 0; i < mesh_.vertices.size(); ++i)
     {
         const auto &pos4 = mesh_.vertices[i].position;
-        Vec3 delta       = subtract(Vec3{pos4.x, pos4.y, pos4.z}, anchor_position);
+        Vec3        delta{pos4.x - anchor_position.x, pos4.y - anchor_position.y, pos4.z - anchor_position.z};
         const float distance = length(delta);
         if (distance < 1.0e-5F)
         {
-            display_stress_[i] += stress_state_.magnitude;
+            display_stress_[i] += reference_scale * stress_state_.magnitude;
             continue;
         }
         delta = scale(delta, 1.0F / distance);
@@ -2703,7 +2992,7 @@ void VulkanViewer::recompute_display_stress()
             continue;
         }
         const float attenuation = std::exp(-distance * stress_state_.falloff);
-        const float influence   = stress_state_.magnitude * alignment * attenuation;
+        const float influence   = reference_scale * stress_state_.magnitude * alignment * attenuation;
         display_stress_[i] += influence;
     }
     apply_display_stress_to_vertices();
@@ -2735,33 +3024,9 @@ void VulkanViewer::normalize_display_stress()
     {
         return;
     }
-    float min_value = std::numeric_limits<float>::infinity();
-    float max_value = -std::numeric_limits<float>::infinity();
-    for (const float value : display_stress_)
-    {
-        if (!std::isfinite(value))
-        {
-            continue;
-        }
-        min_value = std::min(min_value, value);
-        max_value = std::max(max_value, value);
-    }
-    if (!std::isfinite(min_value) || !std::isfinite(max_value))
-    {
-        std::fill(display_stress_.begin(), display_stress_.end(), 0.0F);
-        return;
-    }
-    const float range = max_value - min_value;
-    if (range < 1.0e-6F)
-    {
-        const float fallback = (std::abs(min_value) > 1.0e-6F) ? 1.0F : 0.0F;
-        for (auto &value : display_stress_)
-        {
-            value = std::isfinite(value) ? fallback : 0.0F;
-        }
-        return;
-    }
-    const float inv_range = 1.0F / range;
+    const float reference_min   = base_stress_min_;
+    const float reference_range = std::max(base_stress_reference_range_, 1.0e-6F);
+    const float inv_range       = 1.0F / reference_range;
     for (auto &value : display_stress_)
     {
         if (!std::isfinite(value))
@@ -2769,7 +3034,8 @@ void VulkanViewer::normalize_display_stress()
             value = 0.0F;
             continue;
         }
-        value = (value - min_value) * inv_range;
+        const float normalized = (value - reference_min) * inv_range;
+        value                  = std::clamp(normalized, 0.0F, 1.0F);
     }
 }
 
@@ -2785,6 +3051,10 @@ void VulkanViewer::set_stress_anchor(std::size_t vertex_index)
     stress_state_.anchor_vertex = vertex_index;
     stress_state_.enabled       = true;
     recompute_display_stress();
+    recompute_interactive_offsets();
+    const float active_weight = deformation_enabled_ ? active_deformation_weight() : 0.0F;
+    apply_deformation_scale(active_weight);
+    mark_solver_dirty();
 }
 
 /**
@@ -2792,25 +3062,307 @@ void VulkanViewer::set_stress_anchor(std::size_t vertex_index)
  */
 void VulkanViewer::apply_deformation_scale(float weight)
 {
-    if (!mesh_.has_deformation || deformation_offsets_.empty())
+    if (mesh_.vertices.empty() || mesh_.rest_positions.size() != mesh_.vertices.size())
     {
         return;
     }
-    std::size_t count = std::min(mesh_.vertices.size(), mesh_.rest_positions.size());
-    count             = std::min(count, deformation_offsets_.size());
-    if (count == 0)
+    const bool solver_offsets_available = mesh_.has_deformation && !deformation_offsets_.empty() &&
+                                          deformation_offsets_.size() == mesh_.vertices.size();
+    const bool interactive_enabled = deformation_enabled_ && stress_state_.enabled &&
+                                     interactive_offsets_.size() == mesh_.vertices.size();
+    if (!solver_offsets_available && !interactive_enabled)
     {
         return;
     }
-    for (std::size_t i = 0; i < count; ++i)
+    for (std::size_t i = 0; i < mesh_.vertices.size(); ++i)
     {
-        const Vec4 &rest   = mesh_.rest_positions[i];
-        const Vec3 &offset = deformation_offsets_[i];
-        mesh_.vertices[i].position = Vec4{rest.x + offset.x * weight, rest.y + offset.y * weight, rest.z + offset.z * weight, 1.0F};
+        const Vec4 &rest = mesh_.rest_positions[i];
+        Vec3        total_offset{};
+        if (solver_offsets_available)
+        {
+            const Vec3 &solver = deformation_offsets_[i];
+            total_offset       = add(total_offset, scale(solver, weight));
+        }
+        if (interactive_enabled)
+        {
+            const Vec3 &interactive = interactive_offsets_[i];
+            total_offset            = add(total_offset, scale(interactive, load_scale_));
+        }
+        mesh_.vertices[i].position = Vec4{rest.x + total_offset.x, rest.y + total_offset.y, rest.z + total_offset.z, 1.0F};
     }
     current_deformation_weight_ = weight;
-    vertex_data_dirty_ = true;
+    vertex_data_dirty_          = true;
+    camera_matrices_dirty_      = true;
+}
+
+auto VulkanViewer::active_deformation_weight() const noexcept -> float
+{
+    return deformation_scale_ * load_scale_;
+}
+
+void VulkanViewer::initialize_mesh_state(bool reset_load_reference)
+{
+    base_stress_ = mesh_.stress_values;
+    if (base_stress_.size() < mesh_.vertices.size())
+    {
+        base_stress_.resize(mesh_.vertices.size(), 0.0F);
+    }
+    display_stress_ = base_stress_;
+    refresh_stress_reference_range();
+    const float finite_base_load = std::isfinite(mesh_.base_load_newtons) ? mesh_.base_load_newtons : 0.0F;
+    base_load_reference_newtons_ = std::max(finite_base_load, 1.0e-3F);
+    if (!std::isfinite(base_load_reference_newtons_))
+    {
+        base_load_reference_newtons_ = 1.0e-3F;
+    }
+    if (reset_load_reference)
+    {
+        current_load_newtons_ = base_load_reference_newtons_;
+    }
+    current_load_newtons_ = std::max(current_load_newtons_, 0.0F);
+    const float denom = std::max(base_load_reference_newtons_, 1.0e-6F);
+    load_scale_        = denom > 0.0F ? current_load_newtons_ / denom : 1.0F;
+    stress_state_.magnitude = load_scale_;
+    interactive_offsets_.assign(mesh_.vertices.size(), Vec3{});
+    if (!mesh_.vertices.empty())
+    {
+        stress_state_.anchor_vertex = std::min(stress_state_.anchor_vertex, mesh_.vertices.size() - 1U);
+    }
+    projected_vertices_.resize(mesh_.vertices.size(), ImVec2{0.0F, 0.0F});
+    projected_visible_.resize(mesh_.vertices.size(), false);
+    recompute_display_stress();
+    recompute_interactive_offsets();
+
+    if (mesh_.has_deformation)
+    {
+        const bool rest_match = mesh_.rest_positions.size() == mesh_.vertices.size();
+        const bool def_match  = mesh_.deformed_positions.size() == mesh_.vertices.size();
+        if (rest_match && def_match)
+        {
+            deformation_offsets_.resize(mesh_.vertices.size());
+            float max_offset = 0.0F;
+            for (std::size_t i = 0; i < mesh_.vertices.size(); ++i)
+            {
+                const Vec4 &rest = mesh_.rest_positions[i];
+                const Vec4 &def  = mesh_.deformed_positions[i];
+                Vec3        offset{def.x - rest.x, def.y - rest.y, def.z - rest.z};
+                deformation_offsets_[i] = offset;
+                max_offset              = std::max(max_offset, length(offset));
+            }
+            current_deformation_weight_ = deformation_enabled_ ? deformation_scale_ : 0.0F;
+            log_viewer("mesh state: deformation offsets captured (max {:.6f} m)", max_offset);
+            max_deformation_offset_ = max_offset;
+            if (max_offset < 1.0e-6F)
+            {
+                log_viewer("mesh state: deformation offsets below numeric threshold ({:.6e} m) but controls stay enabled",
+                           max_offset);
+            }
+            if (!deformation_enabled_)
+            {
+                apply_deformation_scale(0.0F);
+            }
+            else
+            {
+                apply_deformation_scale(active_deformation_weight());
+            }
+        }
+        else
+        {
+            log_viewer("mesh state: deformation buffers mismatched (rest {}, deformed {}, vertices {}), disabling toggle",
+                       mesh_.rest_positions.size(), mesh_.deformed_positions.size(), mesh_.vertices.size());
+            mesh_.has_deformation = false;
+            deformation_enabled_  = false;
+            deformation_offsets_.clear();
+            current_deformation_weight_ = 0.0F;
+            max_deformation_offset_     = 0.0F;
+        }
+    }
+    else
+    {
+        deformation_enabled_        = false;
+        current_deformation_weight_ = 0.0F;
+        max_deformation_offset_     = 0.0F;
+        deformation_offsets_.clear();
+    }
+}
+
+void VulkanViewer::set_load_newtons(float newtons)
+{
+    current_load_newtons_ = std::max(newtons, 0.0F);
+    const float denom     = std::max(base_load_reference_newtons_, 1.0e-6F);
+    load_scale_           = denom > 0.0F ? current_load_newtons_ / denom : 1.0F;
+    stress_state_.magnitude = load_scale_;
+    recompute_display_stress();
+    const float active_weight = deformation_enabled_ ? active_deformation_weight() : 0.0F;
+    apply_deformation_scale(active_weight);
+    mark_solver_dirty();
+}
+
+void VulkanViewer::mark_solver_dirty()
+{
+    if (!backend_)
+    {
+        return;
+    }
+    pending_solver_update_ = true;
+}
+
+void VulkanViewer::process_simulation_requests()
+{
+    if (!backend_ || !pending_solver_update_ || source_mesh_ == nullptr)
+    {
+        return;
+    }
+    pending_solver_update_ = false;
+
+    SimulationBackend::StressVectorRequest request{};
+    request.enabled          = stress_state_.enabled;
+    request.anchor           = stress_state_.anchor_vertex;
+    request.direction        = stress_direction();
+    request.magnitude_newtons = current_load_newtons_;
+
+    auto telemetry = backend_->solve(request, false);
+    if (!telemetry)
+    {
+        backend_error_ = telemetry.error();
+        log_viewer("gpu solve failed: {}", backend_error_->message);
+        return;
+    }
+
+    backend_error_.reset();
+    backend_telemetry_ = telemetry.value();
+    simulation_time_   = backend_->simulation_time();
+
+    MeshBuffers updated = build_mesh_buffers(*source_mesh_, backend_->pack(), backend_->derived());
+    mesh_               = std::move(updated);
+    initialize_mesh_state(false);
+    vertex_data_dirty_     = true;
     camera_matrices_dirty_ = true;
+    update_projected_vertices();
+    update_hover_state();
+}
+
+void VulkanViewer::recompute_interactive_offsets()
+{
+    if (mesh_.vertices.empty())
+    {
+        interactive_offsets_.clear();
+        return;
+    }
+    if (interactive_offsets_.size() != mesh_.vertices.size())
+    {
+        interactive_offsets_.assign(mesh_.vertices.size(), Vec3{});
+    }
+    std::fill(interactive_offsets_.begin(), interactive_offsets_.end(), Vec3{});
+    if (!stress_state_.enabled)
+    {
+        return;
+    }
+    const std::size_t anchor = std::min(stress_state_.anchor_vertex, mesh_.vertices.size() - 1U);
+    const bool        has_rest = mesh_.rest_positions.size() == mesh_.vertices.size();
+    const Vec4 &      anchor_rest = has_rest ? mesh_.rest_positions[anchor] : mesh_.vertices[anchor].position;
+    const Vec3        anchor_pos{anchor_rest.x, anchor_rest.y, anchor_rest.z};
+    const Vec3        direction  = stress_direction();
+    const Vec3        extent     = subtract(mesh_.bounds_max, mesh_.bounds_min);
+    const float       normalization = std::max({extent.x, extent.y, extent.z, 1.0F});
+
+    for (std::size_t i = 0; i < mesh_.vertices.size(); ++i)
+    {
+        const Vec4 &pos4 = has_rest ? mesh_.rest_positions[i] : mesh_.vertices[i].position;
+        Vec3        delta{pos4.x - anchor_pos.x, pos4.y - anchor_pos.y, pos4.z - anchor_pos.z};
+        const float distance = length(delta);
+        if (distance < 1.0e-5F)
+        {
+            continue;
+        }
+        delta = scale(delta, 1.0F / distance);
+        const float alignment = dot(delta, direction);
+        if (alignment <= 0.0F)
+        {
+            continue;
+        }
+        const float attenuation = std::exp(-distance * stress_state_.falloff);
+        const float influence   = alignment * attenuation * (distance / normalization);
+        interactive_offsets_[i] = scale(direction, influence * interactive_deformation_gain_);
+    }
+}
+
+
+
+void VulkanViewer::refresh_stress_reference_range()
+{
+    if (base_stress_.empty())
+    {
+        base_stress_min_             = 0.0F;
+        base_stress_max_             = 1.0F;
+        base_stress_reference_range_ = 1.0F;
+        return;
+    }
+    float min_value = std::numeric_limits<float>::infinity();
+    float max_value = -std::numeric_limits<float>::infinity();
+    for (const float value : base_stress_)
+    {
+        if (!std::isfinite(value))
+        {
+            continue;
+        }
+        min_value = std::min(min_value, value);
+        max_value = std::max(max_value, value);
+    }
+    if (!std::isfinite(min_value) || !std::isfinite(max_value))
+    {
+        min_value = 0.0F;
+        max_value = 1.0F;
+    }
+    base_stress_min_ = min_value;
+    base_stress_max_ = max_value;
+    const float delta          = max_value - min_value;
+    const float fallback_range = std::max(std::abs(max_value), 1.0F);
+    base_stress_reference_range_ = std::max(std::abs(delta), std::max(fallback_range, 1.0e-3F));
+}
+
+auto VulkanViewer::estimate_auto_falloff() const -> float
+{
+    if (mesh_.vertices.empty() || base_stress_.empty())
+    {
+        return 0.35F;
+    }
+    const std::size_t anchor = std::min(stress_state_.anchor_vertex, mesh_.vertices.size() - 1U);
+    const Vec3        anchor_position = get_vertex_position(anchor);
+    const float       anchor_stress   = std::max(std::abs(base_stress_[anchor]), 1.0e-3F);
+
+    double       accumulated_gradient = 0.0;
+    std::size_t  gradient_count       = 0U;
+
+    for (std::size_t i = 0; i < mesh_.vertices.size(); ++i)
+    {
+        if (i == anchor)
+        {
+            continue;
+        }
+        const auto &pos4 = mesh_.vertices[i].position;
+        Vec3        delta{pos4.x - anchor_position.x, pos4.y - anchor_position.y, pos4.z - anchor_position.z};
+        const float distance = length(delta);
+        if (distance < 1.0e-4F)
+        {
+            continue;
+        }
+        const float delta_stress = std::abs(base_stress_[i] - base_stress_[anchor]);
+        if (delta_stress < 1.0e-6F)
+        {
+            continue;
+        }
+        accumulated_gradient += static_cast<double>(delta_stress / distance);
+        ++gradient_count;
+    }
+
+    if (gradient_count == 0U)
+    {
+        return 0.35F;
+    }
+    const float mean_gradient = static_cast<float>(accumulated_gradient / static_cast<double>(gradient_count));
+    const float estimated     = std::clamp(mean_gradient / anchor_stress, 0.05F, 2.0F);
+    return estimated;
 }
 
 /**
@@ -2942,20 +3494,38 @@ auto VulkanViewer::load_shader_module(const std::filesystem::path &path) const -
 } // namespace
 
 [[nodiscard]] auto run_viewer_once(const mesh::Mesh &mesh,
-                                   const mesh::pack::PackingResult &packing,
-                                   const post::DerivedFieldSet &derived,
+                                   mesh::pack::PackingResult packing,
+                                   post::DerivedFieldSet derived,
+                                   std::vector<physics::materials::ElasticProperties> materials,
+                                   config::SolverSettings solver_settings,
+                                   config::TimeSettings time_settings,
+                                   physics::materials::RayleighCoefficients rayleigh,
                                    double simulation_time) -> std::expected<void, ViewerError>
 {
     try
     {
-        const auto buffers = build_mesh_buffers(mesh, packing, derived);
+        const auto shader_dir = std::filesystem::path{CWF_SHADER_BUILD_DIR};
+        auto       backend_expected = SimulationBackend::create(std::move(packing),
+                                                          std::move(derived),
+                                                          std::move(materials),
+                                                          solver_settings,
+                                                          time_settings,
+                                                          rayleigh,
+                                                          simulation_time,
+                                                          shader_dir);
+        if (!backend_expected)
+        {
+            return std::unexpected(backend_expected.error());
+        }
+        auto backend = std::move(backend_expected.value());
+        const auto buffers = build_mesh_buffers(mesh, backend->pack(), backend->derived());
         const CameraState camera = make_default_camera(buffers);
         log_viewer("launching viewer: t = {:.4f}s, vertices = {}, indices = {} (camera dist {:.3f})", simulation_time,
                    buffers.vertices.size(), buffers.indices.size(), camera.distance);
 
         GlfwContext glfw{};
         {
-            VulkanViewer viewer(glfw.window, buffers, camera, simulation_time);
+            VulkanViewer viewer(glfw.window, mesh, buffers, camera, simulation_time, std::move(backend));
             viewer.run();
         }
         return {};

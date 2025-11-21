@@ -199,17 +199,18 @@ void write_state_to_pack(const cwf::physics::newmark::State &state, cwf::mesh::p
  * @param cfg         demo configuration (materials, BCs, loads)
  * @param preprocess  cached preprocessing outputs (gradients, volumes, etc.)
  * @param materials   elastic properties derived from cfg.materials
+ * @param rayleigh    Rayleigh damping coefficients shared with the viewer
  * @param pack        packed buffers that will receive solved displacements
  */
 void run_physics_step(const cwf::mesh::Mesh &mesh,
                       const cwf::config::Config &cfg,
                       const cwf::mesh::pre::Outputs &preprocess,
                       const std::vector<cwf::physics::materials::ElasticProperties> &materials,
+                      const cwf::physics::materials::RayleighCoefficients &rayleigh,
                       cwf::mesh::pack::PackingResult &pack)
 {
     const auto assembly  = cwf::physics::solver::assemble_linear_system(mesh, preprocess, materials);
     const auto dirichlet = cwf::physics::solver::build_dirichlet_conditions(mesh, cfg);
-    const auto rayleigh  = cwf::physics::materials::compute_rayleigh(cfg.damping);
     const auto coeffs    = cwf::physics::newmark::make_coefficients(cfg.time.initial_dt, 0.25, 0.5);
 
     cwf::physics::newmark::State previous{};
@@ -270,10 +271,18 @@ int main()
     }
 
     auto materials = make_materials(cfg);
-    run_physics_step(mesh, cfg, preprocess_result.value(), materials, pack);
-    const auto derived = cwf::post::compute_derived_fields(pack, materials);
+    const auto rayleigh = cwf::physics::materials::compute_rayleigh(cfg.damping);
+    run_physics_step(mesh, cfg, preprocess_result.value(), materials, rayleigh, pack);
+    auto derived = cwf::post::compute_derived_fields(pack, materials);
 
-    const auto viewer_status = cwf::ui::run_viewer_once(mesh, pack, derived, 0.0);
+    const auto viewer_status = cwf::ui::run_viewer_once(mesh,
+                                                        std::move(pack),
+                                                        std::move(derived),
+                                                        std::move(materials),
+                                                        cfg.solver,
+                                                        cfg.time,
+                                                        rayleigh,
+                                                        0.0);
     if (!viewer_status)
     {
         std::print(stderr, "viewer error: {}\n", viewer_status.error().message);
