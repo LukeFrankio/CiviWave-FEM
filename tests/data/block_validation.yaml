@@ -1,0 +1,60 @@
+﻿# Simple compression block validation
+# Unit cube with bottom fixed, gravity load
+# Tests basic stress distribution and compression behavior
+
+mesh:
+  path: tests/data/block_validation.msh
+
+materials:
+  - name: concrete
+    E: 3.0e10
+    nu: 0.2
+    rho: 2500.0
+
+assignments:
+  - group: BLOCK
+    material: concrete
+
+damping:
+  xi: 0.05
+  w1: 10.0
+  w2: 100.0
+
+time:
+  dt: 0.1
+  adaptive: false
+  min_dt: 0.01
+  max_dt: 1.0
+
+solver:
+  type: pcg
+  preconditioner: block_jacobi
+  tol_runtime: 1.0e-4
+  tol_pause: 1.0e-6
+  max_iters: 500
+
+precision:
+  vectors: fp32
+  reductions: fp64
+
+curves:
+  gravity_ramp:
+    - [0.0, 0.0]
+    - [0.1, 1.0]
+    - [10.0, 1.0]
+
+loads:
+  gravity: [0.0, 0.0, -9.81]
+  tractions: []
+
+dirichlet:
+  fixes:
+    - group: BOTTOM_FIXED
+      dof: [x, y, z]
+
+output:
+  vtu_stride: 100
+  probes: []
+
+validation:
+  stress_uniformity_tolerance: 0.1

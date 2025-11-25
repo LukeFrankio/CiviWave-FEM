@@ -1,0 +1,63 @@
+﻿# Plate under uniform pressure validation
+# Square plate with bottom edge fixed, uniform load on top
+# Analytical solution approximation for thin plate theory
+
+mesh:
+  path: tests/data/plate_validation.msh
+
+materials:
+  - name: aluminum
+    E: 7.0e10
+    nu: 0.33
+    rho: 2700.0
+
+assignments:
+  - group: PLATE
+    material: aluminum
+
+damping:
+  xi: 0.02
+  w1: 1.0
+  w2: 10.0
+
+time:
+  dt: 0.01
+  adaptive: false
+  min_dt: 0.001
+  max_dt: 0.1
+
+solver:
+  type: pcg
+  preconditioner: block_jacobi
+  tol_runtime: 1.0e-4
+  tol_pause: 1.0e-6
+  max_iters: 500
+
+precision:
+  vectors: fp32
+  reductions: fp64
+
+curves:
+  static_load:
+    - [0.0, 0.0]
+    - [0.1, 1.0]
+    - [10.0, 1.0]
+
+loads:
+  gravity: [0.0, 0.0, 0.0]
+  tractions:
+    - group: TOP_LOAD
+      value: [0.0, 0.0, -10000.0]
+      scale_curve: static_load
+
+dirichlet:
+  fixes:
+    - group: BOTTOM_FIXED
+      dof: [x, y, z]
+
+output:
+  vtu_stride: 100
+  probes: []
+
+validation:
+  max_displacement_tolerance_percent: 10.0

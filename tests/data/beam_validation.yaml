@@ -1,0 +1,68 @@
+﻿# Cantilever beam validation configuration
+# Analytical solution: delta = (P * L^3) / (3 * E * I)
+# For steel beam: E = 200 GPa, L = 1m, h = 0.1m, b = 0.1m
+# I = b*h^3/12 = 8.333e-6 m^4
+# P = 1000 N tip load
+# Expected tip deflection: 0.002 m (2 mm)
+
+mesh:
+  path: tests/data/beam_validation.msh
+
+materials:
+  - name: steel
+    E: 2.0e11
+    nu: 0.3
+    rho: 7850.0
+
+assignments:
+  - group: BEAM
+    material: steel
+
+damping:
+  xi: 0.02
+  w1: 1.0
+  w2: 10.0
+
+time:
+  dt: 0.01
+  adaptive: false
+  min_dt: 0.001
+  max_dt: 0.1
+
+solver:
+  type: pcg
+  preconditioner: block_jacobi
+  tol_runtime: 1.0e-4
+  tol_pause: 1.0e-6
+  max_iters: 500
+
+precision:
+  vectors: fp32
+  reductions: fp64
+
+curves:
+  static_load:
+    - [0.0, 0.0]
+    - [0.1, 1.0]
+    - [10.0, 1.0]
+
+loads:
+  gravity: [0.0, 0.0, 0.0]
+  tractions:
+    - group: FREE_END
+      value: [0.0, 0.0, -100000.0]
+      scale_curve: static_load
+
+dirichlet:
+  fixes:
+    - group: FIXED_END
+      dof: [x, y, z]
+
+output:
+  vtu_stride: 100
+  probes: []
+
+# Expected analytical results for validation
+validation:
+  tip_deflection_z: -0.002
+  tolerance_percent: 5.0

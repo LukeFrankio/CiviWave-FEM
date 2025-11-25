@@ -9,6 +9,7 @@ add_library(cwf_core
 	gpu/device_buffers.cpp
 	gpu/newmark_stepper.cpp
 	gpu/pcg.cpp
+	gpu/instrumentation.cpp
 	physics/loads.cpp
 	physics/newmark.cpp
 	physics/solver.cpp
@@ -63,6 +64,15 @@ target_link_libraries(cwf_core
 		# std::print/std::stacktrace (C++23 experimental goodness) live in libstdc++exp on MinGW 🎯
 		$<$<AND:$<CXX_COMPILER_ID:GNU>,$<BOOL:${WIN32}>>:stdc++exp>
 )
+
+# Tracy profiler integration (Phase 11)
+if(ENABLE_TRACY AND TARGET tracy_client)
+	target_link_libraries(cwf_core PUBLIC tracy_client)
+	target_compile_definitions(cwf_core PUBLIC CWF_ENABLE_TRACY=1)
+	message(STATUS "Tracy profiler integration enabled for cwf_core")
+else()
+	target_compile_definitions(cwf_core PUBLIC CWF_ENABLE_TRACY=0)
+endif()
 
 if(BUILD_UI)
 	target_link_libraries(cwf_core PUBLIC imgui glfw)

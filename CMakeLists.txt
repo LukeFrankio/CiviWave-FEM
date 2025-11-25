@@ -160,13 +160,29 @@ if(ENABLE_TRACY)
     FetchContent_Declare(
         tracy_src
         GIT_REPOSITORY https://github.com/wolfpld/tracy.git
-        GIT_TAG master
+        GIT_TAG v0.11.1
         GIT_SHALLOW TRUE
     )
     FetchContent_MakeAvailable(tracy_src)
+
+    # Build TracyClient as a static library (required for proper linking)
     if(DEFINED tracy_src_SOURCE_DIR)
-        add_library(tracy_client INTERFACE)
-        target_include_directories(tracy_client INTERFACE "${tracy_src_SOURCE_DIR}/client")
+        add_library(tracy_client STATIC
+            "${tracy_src_SOURCE_DIR}/public/TracyClient.cpp"
+        )
+        target_include_directories(tracy_client PUBLIC
+            "${tracy_src_SOURCE_DIR}/public"
+        )
+        target_compile_definitions(tracy_client PUBLIC
+            TRACY_ENABLE
+            TRACY_ON_DEMAND
+        )
+        # Tracy needs these on Windows
+        if(WIN32)
+            target_link_libraries(tracy_client PUBLIC ws2_32 dbghelp)
+        endif()
+        # Enable Vulkan GPU profiling support
+        target_compile_definitions(tracy_client PUBLIC TRACY_VK_USE_SYMBOL_TABLE)
     endif()
 endif()
 

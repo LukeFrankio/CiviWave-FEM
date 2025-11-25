@@ -156,31 +156,68 @@ struct CgResult
     return result;
 }
 
+/**
+ * @brief preconditioned conjugate gradient solver with diagonal preconditioning
+ *
+ * ⚠️ IMPURE FUNCTION (allocates memory)
+ *
+ * Uses RELATIVE tolerance: ||r|| / ||r₀|| < tol, where r₀ is initial residual.
+ * This ensures convergence is independent of problem scale (large forces, etc.)
+ *
+ * @param matrix symmetric positive definite system matrix (dense, row-major)
+ * @param rhs right-hand side vector
+ * @param max_iterations maximum CG iterations allowed
+ * @param tolerance relative residual tolerance ||r||/||r₀||
+ * @return CgResult with solution and convergence stats
+ *
+ * @note uses diagonal (Jacobi) preconditioning for improved conditioning
+ * @note breaks early if search direction becomes orthogonal to matrix
+ */
 [[nodiscard]] auto conjugate_gradient(const std::vector<double> &matrix, const std::vector<double> &rhs,
                                       std::size_t max_iterations, double tolerance) -> CgResult
 {
     const std::size_t   n = rhs.size();
     std::vector<double> x(n, 0.0);
     std::vector<double> r = rhs;
+
+    // Build diagonal preconditioner (Jacobi)
     std::vector<double> diag(n, 1.0);
     for (std::size_t i = 0; i < n; ++i)
     {
         const double value = matrix[i * n + i];
         diag[i]            = std::abs(value) > std::numeric_limits<double>::epsilon() ? value : 1.0;
     }
+
+    // Preconditioned residual z = M⁻¹ * r
     std::vector<double> z(n, 0.0);
     for (std::size_t i = 0; i < n; ++i)
     {
         z[i] = r[i] / diag[i];
     }
-    std::vector<double> p             = z;
-    double              rho           = dot(r, z);
-    double              residual_norm = std::sqrt(dot(r, r));
+
+    std::vector<double> p                = z;
+    double              rho              = dot(r, z);
+    const double        initial_residual = std::sqrt(dot(r, r));
+    double              residual_norm    = initial_residual;
     SolveStats          stats{};
-    if (residual_norm <= tolerance)
+
+    // Handle zero RHS (trivial solution x = 0)
+    if (initial_residual <= std::numeric_limits<double>::epsilon() * 1000.0)
     {
         stats.converged     = true;
         stats.residual_norm = residual_norm;
+        stats.iterations    = 0U;
+        return CgResult{std::move(x), stats};
+    }
+
+    // Compute relative tolerance threshold
+    const double threshold = tolerance * initial_residual;
+
+    // Check if already converged (relative to initial)
+    if (residual_norm <= threshold)
+    {
+        stats.converged     = true;
+        stats.residual_norm = residual_norm / initial_residual;
         stats.iterations    = 0U;
         return CgResult{std::move(x), stats};
     }
@@ -189,38 +226,49 @@ struct CgResult
     {
         const auto   Ap    = apply_matrix(matrix, p);
         const double denom = dot(p, Ap);
+
+        // Check for breakdown (search direction orthogonal to A*p)
         if (std::abs(denom) < std::numeric_limits<double>::epsilon())
         {
             break;
         }
+
         const double alpha = rho / denom;
         for (std::size_t i = 0; i < n; ++i)
         {
             x[i] += alpha * p[i];
             r[i] -= alpha * Ap[i];
         }
+
         residual_norm    = std::sqrt(dot(r, r));
         stats.iterations = iter + 1U;
-        if (residual_norm <= tolerance)
+
+        // Check convergence using RELATIVE tolerance
+        if (residual_norm <= threshold)
         {
             stats.converged     = true;
-            stats.residual_norm = residual_norm;
+            stats.residual_norm = residual_norm / initial_residual;
             return CgResult{std::move(x), stats};
         }
+
+        // Update preconditioned residual
         for (std::size_t i = 0; i < n; ++i)
         {
             z[i] = r[i] / diag[i];
         }
+
         const double rho_new = dot(r, z);
         const double beta    = rho_new / rho;
         rho                  = rho_new;
+
         for (std::size_t i = 0; i < n; ++i)
         {
             p[i] = z[i] + beta * p[i];
         }
     }
+
     stats.converged     = false;
-    stats.residual_norm = residual_norm;
+    stats.residual_norm = residual_norm / initial_residual;
     return CgResult{std::move(x), stats};
 }
 
@@ -239,16 +287,62 @@ struct CgResult
     return mass;
 }
 
+/**
+ * @brief applies dirichlet boundary conditions to system matrix and RHS
+ *
+ * ⚠️ IMPURE FUNCTION (modifies matrix and rhs in-place)
+ *
+ * Uses symmetric elimination method to preserve matrix conditioning:
+ * - Zeros row and column for constrained DOF
+ * - Sets diagonal to original value (not 1.0) to maintain scale
+ * - Modifies RHS appropriately
+ *
+ * @param matrix dense system matrix (modified in place)
+ * @param rhs right-hand side vector (modified in place)
+ * @param conditions dirichlet condition mask and target values
+ * @param state current state for computing displacement increments
+ */
 inline void apply_dirichlet(std::vector<double> &matrix, std::vector<double> &rhs,
                             const DirichletConditions &conditions, const newmark::State &state)
 {
     const std::size_t n = rhs.size();
+    
+    // First pass: modify RHS for non-constrained DOFs
+    // (must happen before zeroing the matrix)
     for (std::size_t dof = 0; dof < n; ++dof)
     {
         if (!conditions.mask[dof])
         {
             continue;
         }
+        
+        const double target_increment = conditions.targets[dof] - state.displacement[dof];
+        
+        // Modify RHS for other (non-constrained) DOFs
+        for (std::size_t row = 0; row < n; ++row)
+        {
+            if (!conditions.mask[row])
+            {
+                rhs[row] -= matrix[row * n + dof] * target_increment;
+            }
+        }
+    }
+    
+    // Second pass: zero out rows/columns and set diagonal
+    for (std::size_t dof = 0; dof < n; ++dof)
+    {
+        if (!conditions.mask[dof])
+        {
+            continue;
+        }
+        
+        const double target_increment = conditions.targets[dof] - state.displacement[dof];
+        
+        // Get the original diagonal value before zeroing
+        const double diag_value = matrix[dof * n + dof];
+        const double scale = (std::abs(diag_value) > 1.0e-30) ? diag_value : 1.0;
+        
+        // Zero out row and column
         for (std::size_t col = 0; col < n; ++col)
         {
             matrix[dof * n + col] = 0.0;
@@ -257,8 +351,10 @@ inline void apply_dirichlet(std::vector<double> &matrix, std::vector<double> &rh
         {
             matrix[row * n + dof] = 0.0;
         }
-        matrix[dof * n + dof] = 1.0;
-        rhs[dof]              = conditions.targets[dof] - state.displacement[dof];
+        
+        // Set diagonal to maintain scale (use original value, not 1.0!)
+        matrix[dof * n + dof] = scale;
+        rhs[dof] = scale * target_increment;
     }
 }
 

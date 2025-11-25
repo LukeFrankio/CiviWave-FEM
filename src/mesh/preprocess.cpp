@@ -279,6 +279,142 @@ struct MaterialBinding
             scale_vec(common::cross(subtract(p2, p0), subtract(p1, p0)), inv6)};
 }
 
+/**
+ * @brief compute hex shape function gradients averaged over element (8-point Gauss quadrature)
+ *
+ * ✨ PURE FUNCTION ✨
+ *
+ * Uses 8-point Gauss quadrature for 3D hex elements. Shape functions are standard
+ * trilinear (serendipity) functions:
+ *   N_i(xi,eta,zeta) = (1/8)(1 + xi_i*xi)(1 + eta_i*eta)(1 + zeta_i*zeta)
+ *
+ * Local node ordering follows Gmsh convention (counterclockwise bottom, then top):
+ *   0: (-1,-1,-1), 1: (+1,-1,-1), 2: (+1,+1,-1), 3: (-1,+1,-1)
+ *   4: (-1,-1,+1), 5: (+1,-1,+1), 6: (+1,+1,+1), 7: (-1,+1,+1)
+ *
+ * @param[in] positions physical coordinates of 8 corner nodes
+ * @param[out] volume computed hexahedron volume (integral of det(J) over element)
+ * @return averaged shape function gradients in physical space for each node
+ */
+[[nodiscard]] auto compute_hex_gradients(const std::array<Vec3, 8> &positions, double &volume)
+    -> std::array<Vec3, 8>
+{
+    // gauss point location (1/sqrt(3) ≈ 0.577350269189626)
+    constexpr double kGaussCoord = 0.577350269189626;
+
+    // local node coordinates in natural (xi, eta, zeta) space
+    constexpr std::array<std::array<double, 3>, 8> kLocalCoords = {{
+        {-1.0, -1.0, -1.0}, // node 0
+        {+1.0, -1.0, -1.0}, // node 1
+        {+1.0, +1.0, -1.0}, // node 2
+        {-1.0, +1.0, -1.0}, // node 3
+        {-1.0, -1.0, +1.0}, // node 4
+        {+1.0, -1.0, +1.0}, // node 5
+        {+1.0, +1.0, +1.0}, // node 6
+        {-1.0, +1.0, +1.0}  // node 7
+    }};
+
+    // 8-point Gauss quadrature locations
+    constexpr std::array<std::array<double, 3>, 8> kGaussPoints = {{
+        {-kGaussCoord, -kGaussCoord, -kGaussCoord}, {+kGaussCoord, -kGaussCoord, -kGaussCoord},
+        {+kGaussCoord, +kGaussCoord, -kGaussCoord}, {-kGaussCoord, +kGaussCoord, -kGaussCoord},
+        {-kGaussCoord, -kGaussCoord, +kGaussCoord}, {+kGaussCoord, -kGaussCoord, +kGaussCoord},
+        {+kGaussCoord, +kGaussCoord, +kGaussCoord}, {-kGaussCoord, +kGaussCoord, +kGaussCoord},
+    }};
+
+    std::array<Vec3, 8> grad_sum{};
+    grad_sum.fill(Vec3{0.0, 0.0, 0.0});
+    volume = 0.0;
+
+    // integrate over 8 Gauss points (weight = 1.0 each for 2x2x2 quadrature)
+    for (const auto &gp : kGaussPoints)
+    {
+        const double xi   = gp[0];
+        const double eta  = gp[1];
+        const double zeta = gp[2];
+
+        // compute shape function derivatives in natural coordinates
+        // dN_i/d(xi,eta,zeta) = (1/8) * sign_i * (1 +/- eta)(1 +/- zeta), etc.
+        std::array<Vec3, 8> dNdnat{};
+        for (std::size_t i = 0; i < 8; ++i)
+        {
+            const double xi_i   = kLocalCoords[i][0];
+            const double eta_i  = kLocalCoords[i][1];
+            const double zeta_i = kLocalCoords[i][2];
+
+            dNdnat[i][0] = 0.125 * xi_i * (1.0 + eta_i * eta) * (1.0 + zeta_i * zeta);
+            dNdnat[i][1] = 0.125 * (1.0 + xi_i * xi) * eta_i * (1.0 + zeta_i * zeta);
+            dNdnat[i][2] = 0.125 * (1.0 + xi_i * xi) * (1.0 + eta_i * eta) * zeta_i;
+        }
+
+        // compute Jacobian matrix J = [dx/dxi, dx/deta, dx/dzeta; ...]
+        // J[row][col] = sum_i (positions[i][row] * dNdnat[i][col])
+        std::array<std::array<double, 3>, 3> jac{};
+        for (auto &row : jac)
+        {
+            row.fill(0.0);
+        }
+        for (std::size_t i = 0; i < 8; ++i)
+        {
+            for (std::size_t row = 0; row < 3; ++row)
+            {
+                for (std::size_t col = 0; col < 3; ++col)
+                {
+                    jac[row][col] += positions[i][row] * dNdnat[i][col];
+                }
+            }
+        }
+
+        // determinant of Jacobian
+        const double det_j = jac[0][0] * (jac[1][1] * jac[2][2] - jac[1][2] * jac[2][1]) -
+                             jac[0][1] * (jac[1][0] * jac[2][2] - jac[1][2] * jac[2][0]) +
+                             jac[0][2] * (jac[1][0] * jac[2][1] - jac[1][1] * jac[2][0]);
+
+        volume += det_j; // weight = 1.0
+
+        // inverse Jacobian (J^-1)
+        const double inv_det = 1.0 / det_j;
+        std::array<std::array<double, 3>, 3> jac_inv{};
+        jac_inv[0][0] = inv_det * (jac[1][1] * jac[2][2] - jac[1][2] * jac[2][1]);
+        jac_inv[0][1] = inv_det * (jac[0][2] * jac[2][1] - jac[0][1] * jac[2][2]);
+        jac_inv[0][2] = inv_det * (jac[0][1] * jac[1][2] - jac[0][2] * jac[1][1]);
+        jac_inv[1][0] = inv_det * (jac[1][2] * jac[2][0] - jac[1][0] * jac[2][2]);
+        jac_inv[1][1] = inv_det * (jac[0][0] * jac[2][2] - jac[0][2] * jac[2][0]);
+        jac_inv[1][2] = inv_det * (jac[0][2] * jac[1][0] - jac[0][0] * jac[1][2]);
+        jac_inv[2][0] = inv_det * (jac[1][0] * jac[2][1] - jac[1][1] * jac[2][0]);
+        jac_inv[2][1] = inv_det * (jac[0][1] * jac[2][0] - jac[0][0] * jac[2][1]);
+        jac_inv[2][2] = inv_det * (jac[0][0] * jac[1][1] - jac[0][1] * jac[1][0]);
+
+        // transform gradients to physical space: dN/dx = J^-T * dN/dnat
+        for (std::size_t i = 0; i < 8; ++i)
+        {
+            const double dNdx = jac_inv[0][0] * dNdnat[i][0] + jac_inv[1][0] * dNdnat[i][1] +
+                                jac_inv[2][0] * dNdnat[i][2];
+            const double dNdy = jac_inv[0][1] * dNdnat[i][0] + jac_inv[1][1] * dNdnat[i][1] +
+                                jac_inv[2][1] * dNdnat[i][2];
+            const double dNdz = jac_inv[0][2] * dNdnat[i][0] + jac_inv[1][2] * dNdnat[i][1] +
+                                jac_inv[2][2] * dNdnat[i][2];
+
+            // accumulate weighted by det_j (integration weighting)
+            grad_sum[i][0] += dNdx * det_j;
+            grad_sum[i][1] += dNdy * det_j;
+            grad_sum[i][2] += dNdz * det_j;
+        }
+    }
+
+    // average gradients (divide by total volume since we weighted by det_j)
+    std::array<Vec3, 8> gradients{};
+    const double        inv_volume = 1.0 / volume;
+    for (std::size_t i = 0; i < 8; ++i)
+    {
+        gradients[i][0] = grad_sum[i][0] * inv_volume;
+        gradients[i][1] = grad_sum[i][1] * inv_volume;
+        gradients[i][2] = grad_sum[i][2] * inv_volume;
+    }
+
+    return gradients;
+}
+
 } // namespace
 
 auto run(const mesh::Mesh &mesh, const config::Config &cfg) -> std::expected<Outputs, PreprocessError>
@@ -322,14 +458,20 @@ auto run(const mesh::Mesh &mesh, const config::Config &cfg) -> std::expected<Out
 
     for (std::size_t elem_index = 0; elem_index < mesh.elements.size(); ++elem_index)
     {
-        const auto &element = mesh.elements[elem_index];
-        if (element.geometry != ElementGeometry::Tetrahedron4)
+        const auto &element    = mesh.elements[elem_index];
+        const auto  is_tet     = (element.geometry == ElementGeometry::Tetrahedron4);
+        const auto  is_hex     = (element.geometry == ElementGeometry::Hexahedron8);
+        const auto  node_count = is_tet ? 4U : 8U;
+
+        if (!is_tet && !is_hex)
         {
-            return make_error("only tetrahedron elements supported in Phase 3",
+            return make_error("unsupported element geometry (only tet4/hex8 supported)",
                               {"elements", std::format("[{}]", elem_index)});
         }
-        std::array<Vec3, 4> positions{};
-        for (std::size_t local = 0; local < 4; ++local)
+
+        // gather node positions
+        std::array<Vec3, 8> positions{};
+        for (std::size_t local = 0; local < node_count; ++local)
         {
             const auto node_idx = element.nodes[local];
             if (node_idx >= mesh.nodes.size())
@@ -340,24 +482,50 @@ auto run(const mesh::Mesh &mesh, const config::Config &cfg) -> std::expected<Out
             positions[local] = mesh.nodes[node_idx].position;
             ++incident_counts[node_idx];
         }
-        const Vec3   e0      = subtract(positions[1], positions[0]);
-        const Vec3   e1      = subtract(positions[2], positions[0]);
-        const Vec3   e2      = subtract(positions[3], positions[0]);
-        const double volume6 = common::dot(e0, common::cross(e1, e2));
-        const double volume  = std::abs(volume6) / 6.0;
-        if (volume <= std::numeric_limits<double>::epsilon())
-        {
-            return make_error("tetrahedron volume non-positive",
-                              {"elements", std::format("[{}]", elem_index)});
-        }
-        outputs.element_volumes[elem_index] = volume;
 
-        auto gradients = compute_tet_gradients(positions, volume6);
+        double volume = 0.0;
         outputs.shape_gradients[elem_index].fill(Vec3{0.0, 0.0, 0.0});
-        for (std::size_t i = 0; i < 4; ++i)
+
+        if (is_tet)
         {
-            outputs.shape_gradients[elem_index][i] = gradients[i];
+            // tetrahedron: use closed-form gradient calculation
+            std::array<Vec3, 4> tet_pos{positions[0], positions[1], positions[2], positions[3]};
+            const Vec3          e0      = subtract(positions[1], positions[0]);
+            const Vec3          e1      = subtract(positions[2], positions[0]);
+            const Vec3          e2      = subtract(positions[3], positions[0]);
+            const double        volume6 = common::dot(e0, common::cross(e1, e2));
+            volume                      = std::abs(volume6) / 6.0;
+
+            if (volume <= std::numeric_limits<double>::epsilon())
+            {
+                return make_error("tetrahedron volume non-positive",
+                                  {"elements", std::format("[{}]", elem_index)});
+            }
+
+            auto gradients = compute_tet_gradients(tet_pos, volume6);
+            for (std::size_t i = 0; i < 4; ++i)
+            {
+                outputs.shape_gradients[elem_index][i] = gradients[i];
+            }
         }
+        else
+        {
+            // hexahedron: use 8-point Gauss quadrature
+            auto hex_gradients = compute_hex_gradients(positions, volume);
+
+            if (volume <= std::numeric_limits<double>::epsilon())
+            {
+                return make_error("hexahedron volume non-positive",
+                                  {"elements", std::format("[{}]", elem_index)});
+            }
+
+            for (std::size_t i = 0; i < 8; ++i)
+            {
+                outputs.shape_gradients[elem_index][i] = hex_gradients[i];
+            }
+        }
+
+        outputs.element_volumes[elem_index] = volume;
 
         const auto material_iter = binding.group_to_material.find(element.physical_group);
         if (material_iter == binding.group_to_material.end())
@@ -368,8 +536,8 @@ auto run(const mesh::Mesh &mesh, const config::Config &cfg) -> std::expected<Out
         const auto material_index                  = material_iter->second;
         outputs.element_material_index[elem_index] = material_index;
         const auto   density                       = cfg.materials[material_index].density;
-        const double lump                          = density * volume / 4.0;
-        for (std::size_t local = 0; local < 4; ++local)
+        const double lump = density * volume / static_cast<double>(node_count);
+        for (std::size_t local = 0; local < node_count; ++local)
         {
             outputs.lumped_mass[element.nodes[local]] += lump;
         }
@@ -389,8 +557,9 @@ auto run(const mesh::Mesh &mesh, const config::Config &cfg) -> std::expected<Out
     std::vector<std::uint32_t> cursor(mesh.nodes.size(), 0U);
     for (std::size_t elem_index = 0; elem_index < mesh.elements.size(); ++elem_index)
     {
-        const auto &element = mesh.elements[elem_index];
-        for (std::size_t local = 0; local < 4; ++local)
+        const auto &element    = mesh.elements[elem_index];
+        const auto  node_count = (element.geometry == ElementGeometry::Tetrahedron4) ? 4U : 8U;
+        for (std::size_t local = 0; local < node_count; ++local)
         {
             const auto node_index = element.nodes[local];
             const auto write_base = outputs.adjacency.offsets[node_index] + cursor[node_index];

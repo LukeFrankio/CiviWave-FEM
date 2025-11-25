@@ -1,0 +1,68 @@
+﻿# Complex bridge structure configuration
+# A multi-span bridge with supports at both ends
+# The deck is loaded with uniform pressure (traffic load)
+# Material: Reinforced concrete
+
+mesh:
+  path: tests/data/bridge.msh
+
+materials:
+  - name: concrete
+    E: 3.0e10      # 30 GPa - reinforced concrete
+    nu: 0.2
+    rho: 2400.0    # kg/m^3
+
+assignments:
+  - group: BRIDGE
+    material: concrete
+
+damping:
+  xi: 0.05         # Higher damping for concrete
+  w1: 1.0
+  w2: 50.0
+
+time:
+  dt: 0.1          # Larger timestep for quasi-static analysis
+  adaptive: false
+  min_dt: 0.01
+  max_dt: 0.5
+
+solver:
+  type: pcg
+  preconditioner: block_jacobi
+  tol_runtime: 1.0e-4
+  tol_pause: 1.0e-6
+  max_iters: 500
+
+precision:
+  vectors: fp32
+  reductions: fp64
+
+curves:
+  traffic_load:
+    - [0.0, 0.0]
+    - [0.5, 1.0]
+    - [10.0, 1.0]
+
+loads:
+  gravity: [0.0, 0.0, -9.81]  # Self-weight
+  tractions:
+    - group: DECK_TOP
+      value: [0.0, 0.0, -50000.0]  # 50 kPa traffic load on deck
+      scale_curve: traffic_load
+
+dirichlet:
+  fixes:
+    - group: LEFT_SUPPORT
+      dof: [x, y, z]
+    - group: RIGHT_SUPPORT
+      dof: [x, y, z]
+
+output:
+  vtu_stride: 10
+  probes: []
+
+# Expected behavior:
+# - Bridge should deflect downward under self-weight and traffic load
+# - Maximum deflection at mid-span
+# - Stress concentration at supports

@@ -30,6 +30,7 @@
 #include <optional>
 #include <print>
 #include <ranges>
+#include <set>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -41,6 +42,9 @@
 #include "cwf/gpu/device_buffers.hpp"
 #include "cwf/gpu/newmark_stepper.hpp"
 #include "cwf/gpu/vulkan_context.hpp"
+#include "cwf/mesh/preprocess.hpp"
+#include "cwf/physics/newmark.hpp"
+#include "cwf/physics/solver.hpp"
 
 namespace cwf::ui
 {
@@ -112,7 +116,8 @@ struct MeshBuffers
     std::vector<Vertex>          vertices;
     std::vector<std::uint32_t>   indices;
     std::vector<float>           stress_values;
-    std::vector<std::array<std::uint32_t, 2>> edges;
+    std::vector<std::array<std::uint32_t, 2>> edges;           // All edges
+    std::vector<std::array<std::uint32_t, 2>> boundary_edges;  // Only exterior/boundary edges
     Vec3                         bounds_min{std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
                                             std::numeric_limits<float>::infinity()};
     Vec3                         bounds_max{-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
@@ -552,6 +557,41 @@ struct CameraInput
                                                                          {4U, 5U}, {5U, 6U}, {6U, 7U}, {7U, 4U},
                                                                          {0U, 4U}, {1U, 5U}, {2U, 6U}, {3U, 7U}}};
 
+    // Track face occurrences to identify boundary faces (faces shared by only 1 element are boundaries)
+    // Face key: sorted triplet of node indices
+    std::unordered_map<std::uint64_t, std::uint32_t> face_counts;
+    const auto make_face_key = [](std::uint32_t a, std::uint32_t b, std::uint32_t c) -> std::uint64_t {
+        // Sort the three indices to get a canonical key
+        if (a > b) std::swap(a, b);
+        if (b > c) std::swap(b, c);
+        if (a > b) std::swap(a, b);
+        return (static_cast<std::uint64_t>(a) << 42U) | (static_cast<std::uint64_t>(b) << 21U) | static_cast<std::uint64_t>(c);
+    };
+    
+    // First pass: count face occurrences
+    for (const auto &element : mesh.elements)
+    {
+        if (element.geometry == mesh::ElementGeometry::Tetrahedron4)
+        {
+            for (const auto &face : kTetFaces)
+            {
+                auto key = make_face_key(element.nodes[face[0]], element.nodes[face[1]], element.nodes[face[2]]);
+                face_counts[key]++;
+            }
+        }
+        else
+        {
+            for (const auto &face : kHexFaces)
+            {
+                // Hex faces are quads, split into two triangles for counting
+                auto key1 = make_face_key(element.nodes[face[0]], element.nodes[face[1]], element.nodes[face[2]]);
+                auto key2 = make_face_key(element.nodes[face[0]], element.nodes[face[2]], element.nodes[face[3]]);
+                face_counts[key1]++;
+                face_counts[key2]++;
+            }
+        }
+    }
+
     const auto emit = [&](std::uint32_t a, std::uint32_t b, std::uint32_t c) {
         constexpr auto kInvalid = std::numeric_limits<std::uint32_t>::max();
         if (a == kInvalid || b == kInvalid || c == kInvalid)
@@ -563,13 +603,26 @@ struct CameraInput
             log_viewer("emit: rejected face ({}, {}, {}) because node_count is {}", a, b, c, node_count);
             return;
         }
-        output.indices.push_back(a);
-        output.indices.push_back(b);
-        output.indices.push_back(c);
+        // Only emit faces that are on the boundary (count == 1)
+        auto key = make_face_key(a, b, c);
+        if (face_counts[key] == 1U)
+        {
+            output.indices.push_back(a);
+            output.indices.push_back(b);
+            output.indices.push_back(c);
+        }
     };
 
+    // Track edges and their face association for boundary detection
+    std::unordered_map<std::uint64_t, std::uint32_t> edge_face_count;
     std::unordered_set<std::uint64_t> edge_set;
     edge_set.reserve(mesh.elements.size() * 12U);
+    
+    const auto make_edge_key = [](std::uint32_t a, std::uint32_t b) -> std::uint64_t {
+        if (a > b) std::swap(a, b);
+        return (static_cast<std::uint64_t>(a) << 32U) | static_cast<std::uint64_t>(b);
+    };
+    
     const auto add_edge = [&](std::uint32_t a, std::uint32_t b) {
         constexpr auto kInvalid = std::numeric_limits<std::uint32_t>::max();
         if (a == kInvalid || b == kInvalid)
@@ -584,10 +637,21 @@ struct CameraInput
         {
             std::swap(a, b);
         }
-        const std::uint64_t key = (static_cast<std::uint64_t>(a) << 32U) | static_cast<std::uint64_t>(b);
+        const std::uint64_t key = make_edge_key(a, b);
         if (edge_set.insert(key).second)
         {
             output.edges.push_back({a, b});
+        }
+    };
+    
+    // Count how many boundary faces each edge belongs to
+    const auto count_edge_boundary_faces = [&](std::uint32_t a, std::uint32_t b, std::uint32_t c) {
+        auto face_key = make_face_key(a, b, c);
+        if (face_counts[face_key] == 1U)  // Boundary face
+        {
+            edge_face_count[make_edge_key(a, b)]++;
+            edge_face_count[make_edge_key(b, c)]++;
+            edge_face_count[make_edge_key(c, a)]++;
         }
     };
 
@@ -598,6 +662,7 @@ struct CameraInput
             for (const auto &face : kTetFaces)
             {
                 emit(element.nodes[face[0]], element.nodes[face[1]], element.nodes[face[2]]);
+                count_edge_boundary_faces(element.nodes[face[0]], element.nodes[face[1]], element.nodes[face[2]]);
             }
             for (const auto &edge : kTetEdges)
             {
@@ -610,6 +675,8 @@ struct CameraInput
             {
                 emit(element.nodes[face[0]], element.nodes[face[1]], element.nodes[face[2]]);
                 emit(element.nodes[face[0]], element.nodes[face[2]], element.nodes[face[3]]);
+                count_edge_boundary_faces(element.nodes[face[0]], element.nodes[face[1]], element.nodes[face[2]]);
+                count_edge_boundary_faces(element.nodes[face[0]], element.nodes[face[2]], element.nodes[face[3]]);
             }
             for (const auto &edge : kHexEdges)
             {
@@ -617,7 +684,21 @@ struct CameraInput
             }
         }
     }
-    log_viewer("build_mesh_buffers: processed {} elements", mesh.elements.size());
+    
+    // Boundary edges are edges that belong to exactly one or two boundary faces
+    // (edges on the silhouette of the mesh surface)
+    for (const auto& [key, count] : edge_face_count)
+    {
+        if (count >= 1U)  // Edge is on at least one boundary face
+        {
+            const auto a = static_cast<std::uint32_t>(key >> 32U);
+            const auto b = static_cast<std::uint32_t>(key & 0xFFFFFFFFU);
+            output.boundary_edges.push_back({a, b});
+        }
+    }
+    
+    log_viewer("build_mesh_buffers: processed {} elements ({} total edges, {} boundary edges)", 
+               mesh.elements.size(), output.edges.size(), output.boundary_edges.size());
 
     if (!std::isfinite(output.bounds_min.x))
     {
@@ -722,10 +803,19 @@ public:
                  MeshBuffers buffers,
                  CameraState camera,
                  double simulation_time,
-                 std::shared_ptr<SimulationBackend> backend);
+                 std::shared_ptr<SimulationBackend> backend,
+                 std::filesystem::path config_directory = {});
     ~VulkanViewer();
 
     void run();
+    
+    /**
+     * @brief returns path to new config if user requested a mesh change
+     */
+    [[nodiscard]] auto restart_requested() const -> std::optional<std::filesystem::path>
+    {
+        return restart_requested_config_;
+    }
 
 private:
     void init_vulkan();
@@ -912,12 +1002,394 @@ private:
     float                       hover_radius_px_{12.0F};
     bool                        overlays_enabled_{true};
     bool                        show_edges_{true};
+    bool                        boundary_edges_only_{true};  // Only show exterior edges by default
     bool                        show_vertices_{true};
     bool                        show_hover_labels_{true};
     bool                        require_ctrl_for_selection_{true};
     bool                        selection_in_progress_{false};
     std::vector<Vec3>           interactive_offsets_{};
     float                       interactive_deformation_gain_{0.05F};
+    
+    // Mesh selector state
+    std::filesystem::path       config_directory_{};
+    std::vector<std::string>    available_configs_{};
+    int                         selected_config_index_{0};
+    std::optional<std::filesystem::path> restart_requested_config_{};
+    bool                        configs_scanned_{false};
+    
+    // Owned mesh for hot-reload (when we load the mesh ourselves)
+    std::optional<mesh::Mesh>   owned_mesh_{};
+    std::string                 reload_status_message_{};
+    bool                        reload_in_progress_{false};
+    
+    /**
+     * @brief scan for YAML config files in config directory
+     *
+     * ⚠️ IMPURE FUNCTION (filesystem I/O)
+     *
+     * scans the config_directory_ or falls back to "tests/data" for .yaml files.
+     * uses multiple path resolution strategies to handle different working dirs.
+     */
+    void scan_config_files()
+    {
+        available_configs_.clear();
+        configs_scanned_ = true;
+        
+        // Try multiple paths to find config files
+        std::vector<std::filesystem::path> search_paths;
+        
+        // 1. Explicit config directory if provided
+        if (!config_directory_.empty())
+        {
+            search_paths.push_back(config_directory_);
+            // Also try as absolute
+            if (config_directory_.is_relative())
+            {
+                search_paths.push_back(std::filesystem::current_path() / config_directory_);
+            }
+        }
+        
+        // 2. Standard relative paths from various working directories
+        search_paths.push_back(std::filesystem::path{"tests/data"});
+        search_paths.push_back(std::filesystem::current_path() / "tests" / "data");
+        
+        // 3. Try to find based on executable location
+        // Go up from build directory to project root
+        auto exe_dir = std::filesystem::current_path();
+        for (int i = 0; i < 3; ++i) // Try up to 3 levels up
+        {
+            auto candidate = exe_dir / "tests" / "data";
+            if (std::filesystem::exists(candidate))
+            {
+                search_paths.push_back(candidate);
+                break;
+            }
+            exe_dir = exe_dir.parent_path();
+        }
+        
+        // Scan each unique path
+        std::set<std::string> found_paths;
+        for (const auto& scan_dir : search_paths)
+        {
+            if (!std::filesystem::exists(scan_dir))
+            {
+                continue;
+            }
+            
+            try
+            {
+                for (const auto& entry : std::filesystem::directory_iterator(scan_dir))
+                {
+                    if (entry.is_regular_file() && entry.path().extension() == ".yaml")
+                    {
+                        auto abs_path = std::filesystem::absolute(entry.path()).string();
+                        if (found_paths.insert(abs_path).second)
+                        {
+                            available_configs_.push_back(abs_path);
+                        }
+                    }
+                }
+            }
+            catch (const std::filesystem::filesystem_error& e)
+            {
+                log_viewer("config scan error in '{}': {}", scan_dir.string(), e.what());
+            }
+        }
+        
+        std::ranges::sort(available_configs_);
+        log_viewer("config scan found {} YAML files (cwd: '{}')", 
+                   available_configs_.size(), 
+                   std::filesystem::current_path().string());
+    }
+    
+    /**
+     * @brief hot-reload mesh from a YAML config file
+     *
+     * ⚠️ IMPURE FUNCTION (filesystem I/O, GPU resource recreation)
+     *
+     * loads the config, parses the mesh, runs preprocessing, packs buffers,
+     * creates a new simulation backend, and updates the viewer state.
+     * the vulkan device/swapchain are preserved - only mesh data is recreated.
+     *
+     * @param config_path path to the YAML configuration file
+     * @return true on success, false on failure (check reload_status_message_)
+     */
+    auto reload_from_config(const std::filesystem::path& config_path) -> bool
+    {
+        reload_in_progress_ = true;
+        reload_status_message_ = "Loading config...";
+        log_viewer("hot-reload: loading config '{}'", config_path.string());
+        
+        // 1. Load and validate config
+        auto config_result = config::load_config_from_file(config_path);
+        if (!config_result)
+        {
+            reload_status_message_ = std::format("Config error: {}", config_result.error().message);
+            log_viewer("hot-reload failed: {}", reload_status_message_);
+            reload_in_progress_ = false;
+            return false;
+        }
+        auto cfg = std::move(config_result.value());
+        
+        // 2. Resolve mesh path - try multiple locations
+        reload_status_message_ = "Loading mesh...";
+        auto mesh_path = cfg.mesh_path;
+        
+        // Build list of candidate paths to try
+        std::vector<std::filesystem::path> candidates;
+        
+        // Try the path as-is first (might be absolute or relative to cwd)
+        candidates.push_back(mesh_path);
+        
+        // Try relative to current working directory
+        if (mesh_path.is_relative())
+        {
+            candidates.push_back(std::filesystem::current_path() / mesh_path);
+        }
+        
+        // Try relative to config file's parent directory
+        // But only if the mesh_path doesn't already start with the config's directory structure
+        auto config_dir = config_path.parent_path();
+        auto mesh_filename = mesh_path.filename();
+        candidates.push_back(config_dir / mesh_filename);
+        
+        // Try going up from config directory to find project root
+        // Look for tests/data pattern and adjust accordingly
+        auto project_root = config_dir;
+        for (int i = 0; i < 5; ++i)
+        {
+            auto candidate = project_root / mesh_path;
+            if (std::filesystem::exists(candidate))
+            {
+                candidates.push_back(candidate);
+                break;
+            }
+            if (project_root.has_parent_path() && project_root.parent_path() != project_root)
+            {
+                project_root = project_root.parent_path();
+            }
+            else
+            {
+                break;
+            }
+        }
+        
+        // Find the first candidate that exists
+        std::filesystem::path resolved_mesh_path;
+        for (const auto& candidate : candidates)
+        {
+            if (std::filesystem::exists(candidate))
+            {
+                resolved_mesh_path = candidate;
+                log_viewer("hot-reload: resolved mesh path '{}' -> '{}'", 
+                           mesh_path.string(), resolved_mesh_path.string());
+                break;
+            }
+        }
+        
+        if (resolved_mesh_path.empty())
+        {
+            reload_status_message_ = std::format("Mesh not found: {} (tried {} locations)", 
+                                                 mesh_path.string(), candidates.size());
+            log_viewer("hot-reload failed: {}", reload_status_message_);
+            for (const auto& c : candidates)
+            {
+                log_viewer("  tried: '{}'", c.string());
+            }
+            reload_in_progress_ = false;
+            return false;
+        }
+        
+        auto mesh_result = mesh::load_gmsh_file(resolved_mesh_path);
+        if (!mesh_result)
+        {
+            reload_status_message_ = std::format("Mesh error: {}", mesh_result.error().message);
+            log_viewer("hot-reload failed: {}", reload_status_message_);
+            reload_in_progress_ = false;
+            return false;
+        }
+        
+        // Store the loaded mesh in owned storage
+        owned_mesh_ = std::move(mesh_result.value());
+        log_viewer("hot-reload: mesh loaded ({} nodes, {} elements)", 
+                   owned_mesh_->nodes.size(), owned_mesh_->elements.size());
+        
+        // 3. Run preprocessing
+        reload_status_message_ = "Preprocessing...";
+        auto preprocess_result = mesh::pre::run(*owned_mesh_, cfg);
+        if (!preprocess_result)
+        {
+            reload_status_message_ = std::format("Preprocess error: {}", preprocess_result.error().message);
+            log_viewer("hot-reload failed: {}", reload_status_message_);
+            reload_in_progress_ = false;
+            return false;
+        }
+        
+        // 4. Build packed buffers
+        reload_status_message_ = "Packing buffers...";
+        auto pack_result = mesh::pack::build_packed_buffers(*owned_mesh_, preprocess_result.value(), cfg, {});
+        if (!pack_result)
+        {
+            reload_status_message_ = std::format("Packing error: {}", pack_result.error().message);
+            log_viewer("hot-reload failed: {}", reload_status_message_);
+            reload_in_progress_ = false;
+            return false;
+        }
+        auto pack = std::move(pack_result.value());
+        
+        // 5. Build materials
+        std::vector<physics::materials::ElasticProperties> materials;
+        materials.reserve(cfg.materials.size());
+        for (const auto& mat : cfg.materials)
+        {
+            materials.push_back(physics::materials::make_properties(mat));
+        }
+        auto rayleigh = physics::materials::compute_rayleigh(cfg.damping);
+        
+        // 6. Run one physics step to get initial deformation
+        reload_status_message_ = "Running physics...";
+        {
+            const auto assembly = physics::solver::assemble_linear_system(*owned_mesh_, preprocess_result.value(), materials);
+            const auto dirichlet = physics::solver::build_dirichlet_conditions(*owned_mesh_, cfg);
+            const auto coeffs = physics::newmark::make_coefficients(cfg.time.initial_dt, 0.25, 0.5);
+            
+            physics::newmark::State previous{};
+            previous.displacement.assign(pack.metadata.dof_count, 0.0);
+            previous.velocity.assign(pack.metadata.dof_count, 0.0);
+            previous.acceleration.assign(pack.metadata.dof_count, 0.0);
+            
+            auto solve_result = physics::solver::solve_newmark_step(
+                assembly, rayleigh, dirichlet, *owned_mesh_, cfg, preprocess_result.value(),
+                coeffs, previous, 0.0, cfg.solver.runtime_tolerance,
+                static_cast<std::size_t>(cfg.solver.max_iterations));
+            
+            // Write state back to pack
+            const std::size_t node_count = pack.metadata.node_count;
+            for (std::size_t node = 0; node < node_count; ++node)
+            {
+                const std::size_t base = node * 3U;
+                pack.buffers.nodes.displacement.x[node] = static_cast<float>(solve_result.state.displacement[base + 0U]);
+                pack.buffers.nodes.displacement.y[node] = static_cast<float>(solve_result.state.displacement[base + 1U]);
+                pack.buffers.nodes.displacement.z[node] = static_cast<float>(solve_result.state.displacement[base + 2U]);
+                pack.buffers.nodes.velocity.x[node] = static_cast<float>(solve_result.state.velocity[base + 0U]);
+                pack.buffers.nodes.velocity.y[node] = static_cast<float>(solve_result.state.velocity[base + 1U]);
+                pack.buffers.nodes.velocity.z[node] = static_cast<float>(solve_result.state.velocity[base + 2U]);
+                pack.buffers.nodes.acceleration.x[node] = static_cast<float>(solve_result.state.acceleration[base + 0U]);
+                pack.buffers.nodes.acceleration.y[node] = static_cast<float>(solve_result.state.acceleration[base + 1U]);
+                pack.buffers.nodes.acceleration.z[node] = static_cast<float>(solve_result.state.acceleration[base + 2U]);
+            }
+            
+            log_viewer("hot-reload: solver {} in {} iterations (residual {:.3e})",
+                       solve_result.stats.converged ? "converged" : "did not converge",
+                       solve_result.stats.iterations, solve_result.stats.residual_norm);
+        }
+        
+        // 7. Compute derived fields
+        reload_status_message_ = "Computing derived fields...";
+        auto derived = post::compute_derived_fields(pack, materials);
+        
+        // 8. Create new simulation backend
+        reload_status_message_ = "Creating GPU backend...";
+        auto backend_result = SimulationBackend::create(
+            std::move(pack), std::move(derived), std::move(materials),
+            cfg.solver, cfg.time, rayleigh, 0.0, shader_directory_);
+        
+        if (!backend_result)
+        {
+            reload_status_message_ = std::format("Backend error: {}", backend_result.error().message);
+            log_viewer("hot-reload failed: {}", reload_status_message_);
+            reload_in_progress_ = false;
+            return false;
+        }
+        
+        // 9. Wait for GPU to finish any pending work
+        if (device_ != VK_NULL_HANDLE)
+        {
+            vkDeviceWaitIdle(device_);
+        }
+        
+        // 10. Update viewer state
+        backend_ = std::move(backend_result.value());
+        source_mesh_ = &(*owned_mesh_);
+        simulation_time_ = 0.0;
+        backend_error_ = std::nullopt;
+        backend_telemetry_ = std::nullopt;
+        
+        // 11. Rebuild mesh buffers for rendering
+        reload_status_message_ = "Rebuilding render buffers...";
+        mesh_ = build_mesh_buffers(*source_mesh_, backend_->pack(), backend_->derived());
+        
+        // 12. Recreate vertex and index buffers (simpler than checking size changes)
+        // Destroy old vertex buffer
+        if (vertex_buffer_ != VK_NULL_HANDLE)
+        {
+            vkDestroyBuffer(device_, vertex_buffer_, nullptr);
+            vertex_buffer_ = VK_NULL_HANDLE;
+        }
+        if (vertex_memory_ != VK_NULL_HANDLE)
+        {
+            vkFreeMemory(device_, vertex_memory_, nullptr);
+            vertex_memory_ = VK_NULL_HANDLE;
+        }
+        
+        // Destroy old index buffer
+        if (index_buffer_ != VK_NULL_HANDLE)
+        {
+            vkDestroyBuffer(device_, index_buffer_, nullptr);
+            index_buffer_ = VK_NULL_HANDLE;
+        }
+        if (index_memory_ != VK_NULL_HANDLE)
+        {
+            vkFreeMemory(device_, index_memory_, nullptr);
+            index_memory_ = VK_NULL_HANDLE;
+        }
+        
+        // Create new buffers
+        vertex_buffer_size_ = 0; // Reset so create_vertex_buffer sets it correctly
+        create_vertex_buffer();
+        create_index_buffer();
+        log_viewer("hot-reload: recreated vertex/index buffers");
+        
+        // 13. Reinitialize mesh state
+        initialize_mesh_state(true);
+        
+        // 14. Reset camera to fit new mesh
+        fit_camera_to_mesh();
+        
+        reload_status_message_ = std::format("Loaded: {} ({} nodes)", 
+                                             config_path.filename().string(),
+                                             owned_mesh_->nodes.size());
+        reload_in_progress_ = false;
+        log_viewer("hot-reload: complete!");
+        return true;
+    }
+    
+    /**
+     * @brief fit camera to view the entire mesh
+     */
+    void fit_camera_to_mesh()
+    {
+        const Vec3 center{
+            (mesh_.bounds_min.x + mesh_.bounds_max.x) * 0.5F,
+            (mesh_.bounds_min.y + mesh_.bounds_max.y) * 0.5F,
+            (mesh_.bounds_min.z + mesh_.bounds_max.z) * 0.5F
+        };
+        const Vec3 extent = subtract(mesh_.bounds_max, mesh_.bounds_min);
+        const float max_extent = std::max({extent.x, extent.y, extent.z});
+        const float distance = max_extent * 2.5F;
+        
+        camera_.focus = center;
+        camera_.distance = std::max(distance, 0.1F);
+        camera_.pitch = -0.6F;
+        camera_.yaw = 3.9F;
+        initial_camera_ = camera_;
+        camera_matrices_dirty_ = true;
+        
+        refresh_camera_matrices();
+        update_projected_vertices();
+        log_viewer("fit_camera_to_mesh: center ({:.3f}, {:.3f}, {:.3f}), distance {:.3f}",
+                   center.x, center.y, center.z, camera_.distance);
+    }
 };
 
 const std::vector<const char *> kValidationLayers = {"VK_LAYER_KHRONOS_validation"};
@@ -947,14 +1419,16 @@ VulkanViewer::VulkanViewer(GLFWwindow *window,
                            MeshBuffers buffers,
                            CameraState camera,
                            double simulation_time,
-                           std::shared_ptr<SimulationBackend> backend)
+                           std::shared_ptr<SimulationBackend> backend,
+                           std::filesystem::path config_directory)
     : window_(window),
       mesh_(std::move(buffers)),
       camera_(camera),
       initial_camera_(camera),
       simulation_time_(simulation_time),
       source_mesh_(&source_mesh),
-      backend_(std::move(backend))
+      backend_(std::move(backend)),
+      config_directory_(std::move(config_directory))
 {
     shader_directory_ = std::filesystem::path{CWF_SHADER_BUILD_DIR};
     if (!std::filesystem::exists(shader_directory_))
@@ -974,6 +1448,9 @@ VulkanViewer::VulkanViewer(GLFWwindow *window,
                shader_directory_.string(), mesh_.vertices.size(), mesh_.indices.size(), rest_extent.x, rest_extent.y,
                rest_extent.z, def_extent.x, def_extent.y, def_extent.z);
     initialize_mesh_state(true);
+    
+    // Scan for config files early so dropdown is populated
+    scan_config_files();
 
     init_vulkan();
     refresh_camera_matrices();
@@ -1654,9 +2131,9 @@ void VulkanViewer::create_graphics_pipeline()
     raster.rasterizerDiscardEnable = VK_FALSE;
     raster.polygonMode             = debug_wireframe_ ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
     raster.lineWidth               = 1.0F;
-    raster.cullMode                = VK_CULL_MODE_BACK_BIT;
-    // Vulkan Y-flip in projection matrix inverts winding, so we need CLOCKWISE for front faces
-    raster.frontFace               = VK_FRONT_FACE_CLOCKWISE;
+    // Disable culling so both sides of faces are visible (important for viewing mesh internals)
+    raster.cullMode                = VK_CULL_MODE_NONE;
+    raster.frontFace               = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     raster.depthBiasEnable         = VK_FALSE;
 
     VkPipelineMultisampleStateCreateInfo msaa{};
@@ -2439,6 +2916,155 @@ void VulkanViewer::build_ui()
         ImGui::Text("Rest extent: (%.3f, %.3f, %.3f)", rest_extent.x, rest_extent.y, rest_extent.z);
         ImGui::Text("Deformed extent: (%.3f, %.3f, %.3f)", def_extent.x, def_extent.y, def_extent.z);
         ImGui::Separator();
+        
+        // =================================================================
+        // MESH SELECTOR - Prominent position at top of controls
+        // =================================================================
+        ImGui::Text("Load Configuration:");
+        
+        // Get display name helper (filename only)
+        const auto get_display_name = [](const std::string &path) -> std::string {
+            return std::filesystem::path(path).filename().string();
+        };
+        
+        if (!available_configs_.empty())
+        {
+            // Clamp index to valid range
+            if (selected_config_index_ >= static_cast<int>(available_configs_.size()))
+            {
+                selected_config_index_ = 0;
+            }
+            
+            const std::string current_display = get_display_name(
+                available_configs_[static_cast<std::size_t>(selected_config_index_)]);
+            
+            ImGui::SetNextItemWidth(200.0F);
+            if (ImGui::BeginCombo("##MeshConfig", current_display.c_str()))
+            {
+                for (int i = 0; i < static_cast<int>(available_configs_.size()); ++i)
+                {
+                    const bool is_selected = (selected_config_index_ == i);
+                    const std::string display = get_display_name(available_configs_[static_cast<std::size_t>(i)]);
+                    if (ImGui::Selectable(display.c_str(), is_selected))
+                    {
+                        selected_config_index_ = i;
+                    }
+                    if (is_selected)
+                    {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                    // Tooltip with full path
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::SetTooltip("%s", available_configs_[static_cast<std::size_t>(i)].c_str());
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            
+            ImGui::SameLine();
+            ImGui::BeginDisabled(reload_in_progress_);
+            if (ImGui::Button("Load"))
+            {
+                const auto &selected_path = available_configs_[static_cast<std::size_t>(selected_config_index_)];
+                log_viewer("user requested hot-reload: '{}'", selected_path);
+                reload_from_config(std::filesystem::path(selected_path));
+            }
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            {
+                if (reload_in_progress_)
+                {
+                    ImGui::SetTooltip("Loading in progress...");
+                }
+                else
+                {
+                    ImGui::SetTooltip("Hot-reload selected configuration");
+                }
+            }
+            
+            // Show reload status
+            if (!reload_status_message_.empty())
+            {
+                if (reload_in_progress_)
+                {
+                    ImGui::SameLine();
+                    ImGui::TextColored(ImVec4(1.0F, 1.0F, 0.0F, 1.0F), "%s", reload_status_message_.c_str());
+                }
+                else
+                {
+                    ImGui::TextDisabled("%s", reload_status_message_.c_str());
+                }
+            }
+        }
+        else
+        {
+            ImGui::TextDisabled("No config files found");
+        }
+        
+        ImGui::SameLine();
+        if (ImGui::Button("Rescan"))
+        {
+            scan_config_files();
+        }
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("Rescan for .yaml config files");
+        }
+        
+        ImGui::TextDisabled("Found %zu configs", available_configs_.size());
+        ImGui::Separator();
+
+        // Mesh Settings collapsible section
+        if (ImGui::CollapsingHeader("Mesh Settings"))
+        {
+            if (source_mesh_)
+            {
+                ImGui::Text("Nodes: %zu", source_mesh_->nodes.size());
+                ImGui::Text("Elements: %zu", source_mesh_->elements.size());
+                ImGui::Text("Surfaces: %zu", source_mesh_->surfaces.size());
+
+                // count element types
+                std::size_t tet_count = 0U;
+                std::size_t hex_count = 0U;
+                for (const auto &elem : source_mesh_->elements)
+                {
+                    if (elem.geometry == mesh::ElementGeometry::Tetrahedron4)
+                    {
+                        ++tet_count;
+                    }
+                    else if (elem.geometry == mesh::ElementGeometry::Hexahedron8)
+                    {
+                        ++hex_count;
+                    }
+                }
+                if (tet_count > 0)
+                {
+                    ImGui::Text("  Tetrahedra: %zu", tet_count);
+                }
+                if (hex_count > 0)
+                {
+                    ImGui::Text("  Hexahedra: %zu", hex_count);
+                }
+
+                // physical groups
+                ImGui::Text("Physical Groups: %zu", source_mesh_->physical_groups.size());
+                for (const auto &group : source_mesh_->physical_groups)
+                {
+                    const char *dim_str = group.dimension == 3U ? "vol"
+                                        : group.dimension == 2U ? "surf"
+                                        : group.dimension == 1U ? "line"
+                                                                : "pt";
+                    ImGui::BulletText("%s (id=%u, %s)", group.name.c_str(), group.id, dim_str);
+                }
+            }
+            else
+            {
+                ImGui::TextDisabled("No source mesh data available");
+            }
+        }
+
+        ImGui::Separator();
         if (backend_)
         {
             if (backend_error_)
@@ -2620,6 +3246,13 @@ void VulkanViewer::build_ui()
             ImGui::Checkbox("Enable overlays", &overlays_enabled_);
             ImGui::BeginDisabled(!overlays_enabled_);
             ImGui::Checkbox("Edge outlines", &show_edges_);
+            ImGui::BeginDisabled(!show_edges_);
+            ImGui::Checkbox("Boundary edges only", &boundary_edges_only_);
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("Show only exterior edges (hides internal mesh structure)");
+            }
+            ImGui::EndDisabled();
             ImGui::SliderFloat("Edge thickness", &edge_outline_thickness_, 0.5F, 8.0F, "%.2f");
             ImGui::Checkbox("Vertex rims", &show_vertices_);
             ImGui::SliderFloat("Vertex radius", &vertex_marker_radius_, 2.0F, 15.0F, "%.1f");
@@ -2860,7 +3493,9 @@ void VulkanViewer::render_overlays()
 
     if (show_edges_ && edge_outline_thickness_ > 0.0F)
     {
-        for (const auto &edge : mesh_.edges)
+        // Select edge set based on boundary_edges_only_ toggle
+        const auto &edges_to_draw = boundary_edges_only_ ? mesh_.boundary_edges : mesh_.edges;
+        for (const auto &edge : edges_to_draw)
         {
             if (edge.size() != 2U)
             {
@@ -3500,7 +4135,8 @@ auto VulkanViewer::load_shader_module(const std::filesystem::path &path) const -
                                    config::SolverSettings solver_settings,
                                    config::TimeSettings time_settings,
                                    physics::materials::RayleighCoefficients rayleigh,
-                                   double simulation_time) -> std::expected<void, ViewerError>
+                                   double simulation_time,
+                                   std::filesystem::path config_directory) -> std::expected<ViewerResult, ViewerError>
 {
     try
     {
@@ -3523,12 +4159,14 @@ auto VulkanViewer::load_shader_module(const std::filesystem::path &path) const -
         log_viewer("launching viewer: t = {:.4f}s, vertices = {}, indices = {} (camera dist {:.3f})", simulation_time,
                    buffers.vertices.size(), buffers.indices.size(), camera.distance);
 
+        ViewerResult result{};
         GlfwContext glfw{};
         {
-            VulkanViewer viewer(glfw.window, mesh, buffers, camera, simulation_time, std::move(backend));
+            VulkanViewer viewer(glfw.window, mesh, buffers, camera, simulation_time, std::move(backend), config_directory);
             viewer.run();
+            result.restart_with_config = viewer.restart_requested();
         }
-        return {};
+        return result;
     }
     catch (const std::exception &ex)
     {

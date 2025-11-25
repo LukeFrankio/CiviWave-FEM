@@ -6,6 +6,7 @@
 
 #include <expected>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -24,6 +25,19 @@ struct ViewerError
     std::vector<std::string> context;
 };
 
+/**
+ * @brief result from viewer run indicating whether restart with new config is requested
+ */
+struct ViewerResult
+{
+    /**
+     * @brief path to new config file if user requested mesh change
+     *
+     * when set, the caller should reload the config and restart the viewer
+     */
+    std::optional<std::filesystem::path> restart_with_config{};
+};
+
 #if defined(CWF_ENABLE_UI) && CWF_ENABLE_UI
 
 [[nodiscard]] auto run_viewer_once(const mesh::Mesh &mesh,
@@ -33,7 +47,8 @@ struct ViewerError
                                    config::SolverSettings solver_settings,
                                    config::TimeSettings time_settings,
                                    physics::materials::RayleighCoefficients rayleigh,
-                                   double simulation_time) -> std::expected<void, ViewerError>;
+                                   double simulation_time,
+                                   std::filesystem::path config_directory = {}) -> std::expected<ViewerResult, ViewerError>;
 
 #else
 
@@ -44,7 +59,8 @@ struct ViewerError
                                           config::SolverSettings,
                                           config::TimeSettings,
                                           physics::materials::RayleighCoefficients,
-                                          double) -> std::expected<void, ViewerError>
+                                          double,
+                                          std::filesystem::path = {}) -> std::expected<ViewerResult, ViewerError>
 {
     return std::unexpected(ViewerError{"BUILD_UI=OFF — viewer unavailable", {}});
 }

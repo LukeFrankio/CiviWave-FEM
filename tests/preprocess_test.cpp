@@ -95,7 +95,7 @@ TEST(PreprocessPipeline, ProducesExpectedOutputsForCantileverFixture)
     EXPECT_THAT(outputs.adjacency.local_indices, ElementsAre(0U, 1U, 2U, 3U));
 }
 
-TEST(PreprocessPipeline, RejectsHexahedraUntilPhaseFour)
+TEST(PreprocessPipeline, SupportsHexahedralElements)
 {
     const std::string gmsh = "$MeshFormat\n4.1 0 8\n$EndMeshFormat\n"
                              "$PhysicalNames\n1\n3 3 \"SOLID\"\n$EndPhysicalNames\n"
@@ -112,8 +112,30 @@ TEST(PreprocessPipeline, RejectsHexahedraUntilPhaseFour)
     ASSERT_TRUE(config_result.has_value());
     const auto config     = config_result.value();
     const auto preprocess = cwf::mesh::pre::run(mesh, config);
-    ASSERT_FALSE(preprocess.has_value());
-    EXPECT_THAT(preprocess.error().message, HasSubstr("only tetrahedron elements supported"));
+    ASSERT_TRUE(preprocess.has_value()) << preprocess.error().message;
+    
+    // verify hex-specific outputs
+    const auto &outputs = preprocess.value();
+    ASSERT_EQ(outputs.element_volumes.size(), 1U);
+    EXPECT_NEAR(outputs.element_volumes.front(), 1.0, 1e-6);  // unit cube volume
+    
+    ASSERT_EQ(outputs.shape_gradients.size(), 1U);
+    // all 8 gradients should be populated for hex
+    for (std::size_t i = 0; i < 8; ++i)
+    {
+        const auto &grad = outputs.shape_gradients[0][i];
+        // verify gradients are non-zero (proper computation)
+        const double mag = std::sqrt(grad[0]*grad[0] + grad[1]*grad[1] + grad[2]*grad[2]);
+        EXPECT_GT(mag, 0.0) << "gradient " << i << " should be non-zero";
+    }
+    
+    // lumped mass for 8 nodes with density 2500, volume 1.0
+    const double expected_mass_per_node = 2500.0 * 1.0 / 8.0;
+    ASSERT_EQ(outputs.lumped_mass.size(), 8U);
+    for (double mass : outputs.lumped_mass)
+    {
+        EXPECT_NEAR(mass, expected_mass_per_node, 1e-6);
+    }
 }
 
 TEST(PreprocessPipeline, ErrorsWhenPhysicalGroupMissingAssignment)
@@ -231,4 +253,92 @@ TEST(PreprocessPipeline, ValidatesTractionGroupsExist)
     const auto preprocess = cwf::mesh::pre::run(mesh, config);
     ASSERT_FALSE(preprocess.has_value());
     EXPECT_THAT(preprocess.error().message, HasSubstr("traction load references missing physical group"));
+}
+
+TEST(PreprocessPipeline, LoadsBlockValidationMesh)
+{
+    const std::filesystem::path data_dir{CWF_TEST_DATA_DIR};
+    const auto mesh_result = cwf::mesh::load_gmsh_file(data_dir / "block_validation.msh");
+    ASSERT_TRUE(mesh_result.has_value()) << mesh_result.error().message;
+    const auto &mesh = mesh_result.value();
+    
+    EXPECT_EQ(mesh.nodes.size(), 8U);
+    EXPECT_EQ(mesh.elements.size(), 6U);  // 6 tets to fill unit cube
+    EXPECT_EQ(mesh.surfaces.size(), 4U);  // 2 bottom + 2 top triangles
+    
+    // Create config matching block_validation.yaml
+    cwf::test_support::ConfigBuilderOptions opts;
+    opts.assignments = {{"BLOCK", "concrete"}};
+    opts.materials = {{"concrete", 3.0e10, 0.2, 2500.0}};
+    opts.dirichlet_fixes = {{"BOTTOM_FIXED", {true, true, true}, {std::nullopt, std::nullopt, std::nullopt}}};
+    opts.tractions.clear();
+    const auto config_result = cwf::test_support::load_config(opts);
+    ASSERT_TRUE(config_result.has_value()) << "config builder failed";
+    const auto config = config_result.value();
+    
+    const auto preprocess = cwf::mesh::pre::run(mesh, config);
+    ASSERT_TRUE(preprocess.has_value()) << preprocess.error().message;
+    
+    const auto &outputs = preprocess.value();
+    EXPECT_EQ(outputs.element_volumes.size(), 6U);
+    
+    // total volume should be 1.0 (unit cube)
+    double total_vol = 0.0;
+    for (double v : outputs.element_volumes)
+    {
+        total_vol += v;
+    }
+    EXPECT_NEAR(total_vol, 1.0, 1.0e-6);
+}
+
+/**
+ * @test beam validation mesh loads correctly with surface groups
+ *
+ * verifies surface groups are properly populated for dirichlet and traction loading
+ */
+TEST(PreprocessPipeline, LoadsBeamValidationMeshWithSurfaces)
+{
+    const std::filesystem::path data_dir{CWF_TEST_DATA_DIR};
+    const auto mesh_result = cwf::mesh::load_gmsh_file(data_dir / "beam_validation.msh");
+    ASSERT_TRUE(mesh_result.has_value()) << mesh_result.error().message;
+    const auto &mesh = mesh_result.value();
+    
+    EXPECT_EQ(mesh.nodes.size(), 8U);
+    EXPECT_EQ(mesh.elements.size(), 6U);  // 6 tets to fill beam
+    EXPECT_EQ(mesh.surfaces.size(), 4U);  // 2 FIXED_END + 2 FREE_END triangles
+    
+    // Verify physical groups exist
+    bool found_fixed = false;
+    bool found_free = false;
+    bool found_beam = false;
+    for (const auto &group : mesh.physical_groups)
+    {
+        if (group.name == "FIXED_END") found_fixed = true;
+        if (group.name == "FREE_END") found_free = true;
+        if (group.name == "BEAM") found_beam = true;
+    }
+    EXPECT_TRUE(found_fixed) << "FIXED_END physical group not found";
+    EXPECT_TRUE(found_free) << "FREE_END physical group not found";
+    EXPECT_TRUE(found_beam) << "BEAM physical group not found";
+    
+    // Verify surface groups are populated
+    std::size_t total_surfaces_in_groups = 0U;
+    for (const auto &[group_id, surfaces] : mesh.surface_groups)
+    {
+        total_surfaces_in_groups += surfaces.size();
+    }
+    EXPECT_EQ(total_surfaces_in_groups, 4U) << "surface_groups should contain all 4 surfaces";
+    
+    // Create config matching beam_validation.yaml
+    cwf::test_support::ConfigBuilderOptions opts;
+    opts.assignments = {{"BEAM", "steel"}};
+    opts.materials = {{"steel", 2.0e11, 0.3, 7850.0}};
+    opts.dirichlet_fixes = {{"FIXED_END", {true, true, true}, {std::nullopt, std::nullopt, std::nullopt}}};
+    opts.tractions = {{"FREE_END", {0.0, 0.0, -100000.0}, ""}};
+    const auto config_result = cwf::test_support::load_config(opts);
+    ASSERT_TRUE(config_result.has_value()) << "config builder failed";
+    const auto config = config_result.value();
+    
+    const auto preprocess = cwf::mesh::pre::run(mesh, config);
+    ASSERT_TRUE(preprocess.has_value()) << preprocess.error().message;
 }

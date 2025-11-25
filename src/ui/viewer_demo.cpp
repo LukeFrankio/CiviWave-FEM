@@ -282,11 +282,19 @@ int main()
                                                         cfg.solver,
                                                         cfg.time,
                                                         rayleigh,
-                                                        0.0);
+                                                        0.0,
+                                                        std::filesystem::path{"tests/data"});
     if (!viewer_status)
     {
         std::print(stderr, "viewer error: {}\n", viewer_status.error().message);
         return EXIT_FAILURE;
+    }
+    
+    if (viewer_status->restart_with_config)
+    {
+        std::print("User requested restart with config: {}\n", viewer_status->restart_with_config->string());
+        // In a real application, you would loop here to reload and restart
+        // For the demo, we just report the request
     }
 
     return EXIT_SUCCESS;

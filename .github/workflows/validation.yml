@@ -1,0 +1,112 @@
+name: Validation Gate
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
+
+jobs:
+  validation-tests:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install modern toolchain
+        run: |
+          set -e
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          sudo apt-get update
+          if sudo apt-get install -y gcc-15 g++-15; then
+            echo "Using gcc-15"
+            echo "CC=gcc-15" | tee -a "$GITHUB_ENV"
+            echo "CXX=g++-15" | tee -a "$GITHUB_ENV"
+          else
+            echo "GCC 15 unavailable; using Clang 19 + libc++ fallback" >&2
+            wget https://apt.llvm.org/llvm.sh
+            chmod +x llvm.sh
+            sudo ./llvm.sh 19
+            sudo apt-get install -y clang-19 libc++-19-dev libc++abi-19-dev
+            rm -f llvm.sh
+            echo "CC=clang-19" | tee -a "$GITHUB_ENV"
+            echo "CXX=clang++-19" | tee -a "$GITHUB_ENV"
+            echo "USE_LIBCXX=ON" | tee -a "$GITHUB_ENV"
+            echo "CXXFLAGS=-stdlib=libc++" | tee -a "$GITHUB_ENV"
+            echo "LDFLAGS=-stdlib=libc++ -lc++abi" | tee -a "$GITHUB_ENV"
+          fi
+          sudo apt-get install -y ninja-build python3-pip
+
+      - name: Install CMake 4.1.2+
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install --upgrade cmake
+          cmake --version
+
+      - name: Configure
+        run: |
+          if [ "${USE_LIBCXX:-}" = "ON" ]; then
+            cmake -S . -B build -G Ninja \
+              -DFORCE_FETCH_DEPS=ON \
+              -DENABLE_VALIDATION=ON \
+              -DREQUIRE_GCC_15=OFF \
+              -DCMAKE_CXX_FLAGS="$CXXFLAGS" \
+              -DCMAKE_EXE_LINKER_FLAGS="$LDFLAGS" \
+              -DCMAKE_SHARED_LINKER_FLAGS="$LDFLAGS"
+          else
+            cmake -S . -B build -G Ninja \
+              -DFORCE_FETCH_DEPS=ON \
+              -DENABLE_VALIDATION=ON \
+              -DREQUIRE_GCC_15=OFF
+          fi
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Run Validation Tests
+        run: |
+          # Run only validation tests with detailed output
+          ctest --test-dir build \
+            --output-on-failure \
+            -C Release \
+            -R "Validation|Regression" \
+            --timeout 300
+
+      - name: Run Static Validation Gate
+        run: |
+          # Run specifically the static validation tests that gate merges
+          # These tests have hard thresholds that must pass
+          ctest --test-dir build \
+            --output-on-failure \
+            -C Release \
+            -R "StaticValidation" \
+            --timeout 180
+
+      - name: Generate Validation Report
+        if: always()
+        run: |
+          echo "## Validation Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f build/Testing/Temporary/LastTest.log ]; then
+            echo "### Test Output" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -100 build/Testing/Temporary/LastTest.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Validation Criteria" >> $GITHUB_STEP_SUMMARY
+          echo "- Cantilever beam tip deflection: ±20% of analytical solution" >> $GITHUB_STEP_SUMMARY
+          echo "- Solver convergence: All meshes must converge" >> $GITHUB_STEP_SUMMARY
+          echo "- Reproducibility: Results must match within 1e-12" >> $GITHUB_STEP_SUMMARY
+          echo "- Boundary conditions: Constrained DOFs exactly at targets" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Test Logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-test-logs
+          path: |
+            build/Testing/
+            build/test*.log
+          retention-days: 7

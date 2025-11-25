@@ -30,6 +30,8 @@ add_executable(cwf_core_tests
     pack_shard_upload_test.cpp
     pcg_test.cpp
     newmark_stepper_test.cpp
+    instrumentation_test.cpp
+    validation_test.cpp
 )
 
 target_link_libraries(cwf_core_tests PRIVATE
