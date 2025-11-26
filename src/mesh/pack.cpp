@@ -224,7 +224,7 @@ auto build_packed_buffers(const mesh::Mesh &mesh, const mesh::pre::Outputs &prep
     // solver ------------------------------------------------------------
     buffers.solver.p.assign(dof_count, 0.0F);
     buffers.solver.r.assign(dof_count, 0.0F);
-    buffers.solver.Ap.assign(dof_count, 0.0F);
+    buffers.solver.ap.assign(dof_count, 0.0F);
     buffers.solver.z.assign(dof_count, 0.0F);
     buffers.solver.x.assign(dof_count, 0.0F);
     buffers.solver.block_inverse.assign(node_count * 9U, 0.0F);

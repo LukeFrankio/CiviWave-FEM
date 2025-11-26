@@ -76,7 +76,8 @@ struct ElementsParseResult
     {
         if (!std::getline(stream, line))
         {
-            return std::unexpected(MeshError{"unexpected EOF in $PhysicalNames", {"PhysicalNames"}});
+            return std::unexpected(
+                MeshError{.message = "unexpected EOF in $PhysicalNames", .context = {"PhysicalNames"}});
         }
         std::istringstream line_stream{line};
         std::uint32_t      dim = 0U;
@@ -99,10 +100,14 @@ struct ElementsParseResult
     std::string  line;
     if (!std::getline(stream, line))
     {
-        return std::unexpected(MeshError{"unexpected EOF in $Entities header", {"Entities"}});
+        return std::unexpected(
+            MeshError{.message = "unexpected EOF in $Entities header", .context = {"Entities"}});
     }
     std::istringstream header_stream{line};
-    std::uint32_t      num_points{}, num_curves{}, num_surfaces{}, num_volumes{};
+    std::uint32_t      num_points{};
+    std::uint32_t      num_curves{};
+    std::uint32_t      num_surfaces{};
+    std::uint32_t      num_volumes{};
     header_stream >> num_points >> num_curves >> num_surfaces >> num_volumes;
 
     auto parse_entity_block = [&](std::uint32_t dimension,
@@ -111,13 +116,18 @@ struct ElementsParseResult
         {
             if (!std::getline(stream, line))
             {
-                return std::unexpected(MeshError{"unexpected EOF inside $Entities block",
-                                                 {"Entities", std::format("dim{}", dimension)}});
+                return std::unexpected(MeshError{.message = "unexpected EOF inside $Entities block",
+                                                 .context = {"Entities", std::format("dim{}", dimension)}});
             }
             std::istringstream entity_stream{line};
             std::uint32_t      tag{};
             entity_stream >> tag;
-            double minx{}, miny{}, minz{}, maxx{}, maxy{}, maxz{};
+            double minx{};
+            double miny{};
+            double minz{};
+            double maxx{};
+            double maxy{};
+            double maxz{};
             entity_stream >> minx >> miny >> minz >> maxx >> maxy >> maxz;
             std::uint32_t num_phys = 0U;
             entity_stream >> num_phys;
@@ -166,10 +176,13 @@ struct ElementsParseResult
     std::string                                                   line;
     if (!std::getline(stream, line))
     {
-        return std::unexpected(MeshError{"unexpected EOF in $Nodes header", {"Nodes"}});
+        return std::unexpected(MeshError{.message = "unexpected EOF in $Nodes header", .context = {"Nodes"}});
     }
     std::istringstream header_stream{line};
-    std::uint64_t      num_entity_blocks{}, num_nodes{}, min_node{}, max_node{};
+    std::uint64_t      num_entity_blocks{};
+    std::uint64_t      num_nodes{};
+    std::uint64_t      min_node{};
+    std::uint64_t      max_node{};
     header_stream >> num_entity_blocks >> num_nodes >> min_node >> max_node;
     nodes.reserve(static_cast<std::size_t>(num_nodes));
 
@@ -177,10 +190,12 @@ struct ElementsParseResult
     {
         if (!std::getline(stream, line))
         {
-            return std::unexpected(MeshError{"unexpected EOF in $Nodes block header", {"Nodes"}});
+            return std::unexpected(
+                MeshError{.message = "unexpected EOF in $Nodes block header", .context = {"Nodes"}});
         }
         std::istringstream block_stream{line};
-        std::uint32_t      entity_dim{}, entity_tag{};
+        std::uint32_t      entity_dim{};
+        std::uint32_t      entity_tag{};
         std::uint32_t      parametric{};
         std::uint64_t      nodes_in_block{};
         block_stream >> entity_dim >> entity_tag >> parametric >> nodes_in_block;
@@ -196,7 +211,8 @@ struct ElementsParseResult
         {
             if (!std::getline(stream, line))
             {
-                return std::unexpected(MeshError{"unexpected EOF reading node ids", {"Nodes"}});
+                return std::unexpected(
+                    MeshError{.message = "unexpected EOF reading node ids", .context = {"Nodes"}});
             }
             node_ids[static_cast<std::size_t>(i)] =
                 static_cast<std::uint32_t>(std::stoul(std::string(trim(line))));
@@ -205,12 +221,16 @@ struct ElementsParseResult
         {
             if (!std::getline(stream, line))
             {
-                return std::unexpected(MeshError{"unexpected EOF reading node coordinates", {"Nodes"}});
+                return std::unexpected(
+                    MeshError{.message = "unexpected EOF reading node coordinates", .context = {"Nodes"}});
             }
             std::istringstream coord_stream{line};
-            double             x{}, y{}, z{};
+            double             x{};
+            double             y{};
+            double             z{};
             coord_stream >> x >> y >> z;
-            Node node{node_ids[static_cast<std::size_t>(i)], common::Vec3{x, y, z}};
+            Node node{.original_id = node_ids[static_cast<std::size_t>(i)],
+                      .position    = common::Vec3{x, y, z}};
             id_to_index[node.original_id] = nodes.size();
             nodes.push_back(std::move(node));
             const auto node_index = static_cast<std::uint32_t>(nodes.size() - 1U);
@@ -226,9 +246,11 @@ struct ElementsParseResult
 
     if (nodes.size() != static_cast<std::size_t>(num_nodes))
     {
-        return std::unexpected(MeshError{"node count mismatch", {"Nodes"}});
+        return std::unexpected(MeshError{.message = "node count mismatch", .context = {"Nodes"}});
     }
-    return NodesParseResult{std::move(nodes), std::move(id_to_index), std::move(nodes_by_group)};
+    return NodesParseResult{.nodes          = std::move(nodes),
+                            .id_to_index    = std::move(id_to_index),
+                            .nodes_by_group = std::move(nodes_by_group)};
 }
 
 [[nodiscard]] auto element_node_count(std::uint32_t gmsh_type) -> std::optional<std::size_t>
@@ -283,10 +305,14 @@ struct ElementsParseResult
     std::string         line;
     if (!std::getline(stream, line))
     {
-        return std::unexpected(MeshError{"unexpected EOF in $Elements header", {"Elements"}});
+        return std::unexpected(
+            MeshError{.message = "unexpected EOF in $Elements header", .context = {"Elements"}});
     }
     std::istringstream header_stream{line};
-    std::uint64_t      num_blocks{}, num_elements{}, min_tag{}, max_tag{};
+    std::uint64_t      num_blocks{};
+    std::uint64_t      num_elements{};
+    std::uint64_t      min_tag{};
+    std::uint64_t      max_tag{};
     header_stream >> num_blocks >> num_elements >> min_tag >> max_tag;
     std::size_t processed_count = 0U;
 
@@ -294,17 +320,21 @@ struct ElementsParseResult
     {
         if (!std::getline(stream, line))
         {
-            return std::unexpected(MeshError{"unexpected EOF reading element block header", {"Elements"}});
+            return std::unexpected(
+                MeshError{.message = "unexpected EOF reading element block header", .context = {"Elements"}});
         }
         std::istringstream block_stream{line};
-        std::uint32_t      entity_dim{}, entity_tag{}, element_type{};
+        std::uint32_t      entity_dim{};
+        std::uint32_t      entity_tag{};
+        std::uint32_t      element_type{};
         std::uint64_t      elements_in_block{};
         block_stream >> entity_dim >> entity_tag >> element_type >> elements_in_block;
         const auto node_count_opt = element_node_count(element_type);
         if (!node_count_opt)
         {
-            return std::unexpected(MeshError{std::format("unsupported Gmsh element type {}", element_type),
-                                             {"Elements", std::format("entityTag={}", entity_tag)}});
+            return std::unexpected(
+                MeshError{.message = std::format("unsupported Gmsh element type {}", element_type),
+                          .context = {"Elements", std::format("entityTag={}", entity_tag)}});
         }
         const auto node_count = node_count_opt.value();
 
@@ -323,7 +353,8 @@ struct ElementsParseResult
         {
             if (!std::getline(stream, line))
             {
-                return std::unexpected(MeshError{"unexpected EOF reading element data", {"Elements"}});
+                return std::unexpected(
+                    MeshError{.message = "unexpected EOF reading element data", .context = {"Elements"}});
             }
             ++processed_count;
             std::istringstream elem_stream{line};
@@ -336,8 +367,8 @@ struct ElementsParseResult
                 if (!geom_opt)
                 {
                     return std::unexpected(
-                        MeshError{std::format("unsupported volume element type {}", element_type),
-                                  {"Elements", std::format("elementTag={}", element_tag)}});
+                        MeshError{.message = std::format("unsupported volume element type {}", element_type),
+                                  .context = {"Elements", std::format("elementTag={}", element_tag)}});
                 }
                 Element element{};
                 element.original_id    = element_tag;
@@ -352,8 +383,8 @@ struct ElementsParseResult
                     if (map_iter == id_to_index.end())
                     {
                         return std::unexpected(
-                            MeshError{std::format("element references unknown node {}", node_tag),
-                                      {"Elements", std::format("elementTag={}", element_tag)}});
+                            MeshError{.message = std::format("element references unknown node {}", node_tag),
+                                      .context = {"Elements", std::format("elementTag={}", element_tag)}});
                     }
                     element.nodes[node_idx] = static_cast<std::uint32_t>(map_iter->second);
                 }
@@ -366,8 +397,8 @@ struct ElementsParseResult
                 if (!geom_opt)
                 {
                     return std::unexpected(
-                        MeshError{std::format("unsupported surface element type {}", element_type),
-                                  {"Elements", std::format("elementTag={}", element_tag)}});
+                        MeshError{.message = std::format("unsupported surface element type {}", element_type),
+                                  .context = {"Elements", std::format("elementTag={}", element_tag)}});
                 }
                 Surface surface{};
                 surface.original_id    = element_tag;
@@ -382,8 +413,8 @@ struct ElementsParseResult
                     if (map_iter == id_to_index.end())
                     {
                         return std::unexpected(
-                            MeshError{std::format("surface references unknown node {}", node_tag),
-                                      {"Elements", std::format("elementTag={}", element_tag)}});
+                            MeshError{.message = std::format("surface references unknown node {}", node_tag),
+                                      .context = {"Elements", std::format("elementTag={}", element_tag)}});
                     }
                     surface.nodes[node_idx] = static_cast<std::uint32_t>(map_iter->second);
                 }
@@ -407,7 +438,7 @@ struct ElementsParseResult
 
     if (processed_count != static_cast<std::size_t>(num_elements))
     {
-        return std::unexpected(MeshError{"element count mismatch", {"Elements"}});
+        return std::unexpected(MeshError{.message = "element count mismatch", .context = {"Elements"}});
     }
     return result;
 }
@@ -433,11 +464,12 @@ struct ElementsParseResult
 
 auto load_gmsh_file(const std::filesystem::path &path) -> MeshResult
 {
-    std::ifstream file(path);
+    std::ifstream const file(path);
     if (!file.is_open())
     {
         return std::unexpected(
-            MeshError{std::format("failed to open mesh file: {}", path.string()), {path.string()}});
+            MeshError{.message = std::format("failed to open mesh file: {}", path.string()),
+                      .context = {path.string()}});
     }
     std::ostringstream buffer;
     buffer << file.rdbuf();
@@ -515,11 +547,11 @@ auto load_gmsh_from_string(std::string_view ascii_contents) -> MeshResult
 
     if (!seen_sections.contains(make_entity_key(7U, 7U)))
     {
-        return std::unexpected(MeshError{"missing $Nodes section", {}});
+        return std::unexpected(MeshError{.message = "missing $Nodes section", .context = {}});
     }
     if (!seen_sections.contains(make_entity_key(6U, 6U)))
     {
-        return std::unexpected(MeshError{"missing $Elements section", {}});
+        return std::unexpected(MeshError{.message = "missing $Elements section", .context = {}});
     }
 
     std::unordered_map<std::uint32_t, PhysicalGroup> group_map;
@@ -527,7 +559,7 @@ auto load_gmsh_from_string(std::string_view ascii_contents) -> MeshResult
     {
         const auto dimension = static_cast<std::uint32_t>(key >> 32U);
         const auto tag       = static_cast<std::uint32_t>(key & 0xFFFFFFFFU);
-        group_map.emplace(tag, PhysicalGroup{dimension, tag, name});
+        group_map.emplace(tag, PhysicalGroup{.dimension = dimension, .id = tag, .name = name});
     }
     for (const auto &[phys_id, dimension] : entities.physical_dimensions)
     {

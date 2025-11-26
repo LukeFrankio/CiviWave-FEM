@@ -28,10 +28,10 @@ using cwf::post::compute_derived_fields;
 {
     cwf::mesh::Mesh mesh{};
     mesh.nodes = {
-        cwf::mesh::Node{0U, cwf::common::Vec3{0.0, 0.0, 0.0}},
-        cwf::mesh::Node{1U, cwf::common::Vec3{1.0, 0.0, 0.0}},
-        cwf::mesh::Node{2U, cwf::common::Vec3{0.0, 1.0, 0.0}},
-        cwf::mesh::Node{3U, cwf::common::Vec3{0.0, 0.0, 1.0}},
+        cwf::mesh::Node{.original_id = 0U, .position = cwf::common::Vec3{0.0, 0.0, 0.0}},
+        cwf::mesh::Node{.original_id = 1U, .position = cwf::common::Vec3{1.0, 0.0, 0.0}},
+        cwf::mesh::Node{.original_id = 2U, .position = cwf::common::Vec3{0.0, 1.0, 0.0}},
+        cwf::mesh::Node{.original_id = 3U, .position = cwf::common::Vec3{0.0, 0.0, 1.0}},
     };
     mesh.physical_groups.push_back(cwf::mesh::PhysicalGroup{.dimension = 3U, .id = 1U, .name = "SOLID"});
     mesh.group_lookup.emplace(1U, 0U);
@@ -77,7 +77,7 @@ TEST(VtuWriter, WritesBinaryFileWithMetadata)
     ASSERT_TRUE(pack_result.has_value());
     auto pack = std::move(pack_result.value());
 
-    const auto materials = [&cfg]() {
+    const auto materials = [&cfg]() -> std::vector<cwf::physics::materials::ElasticProperties> {
         std::vector<cwf::physics::materials::ElasticProperties> mats{};
         mats.reserve(cfg.materials.size());
         for (const auto &mat : cfg.materials)
@@ -116,8 +116,9 @@ TEST(ProbeLoggerTests, WritesCsvRows)
         pack.buffers.nodes.displacement.x[node] = static_cast<float>(0.01 * mesh.nodes[node].position[0]);
     }
 
-    const auto materials = [&cfg]() {
+    const auto materials = [&cfg]() -> std::vector<cwf::physics::materials::ElasticProperties> {
         std::vector<cwf::physics::materials::ElasticProperties> mats{};
+        mats.reserve(cfg.materials.size());
         for (const auto &mat : cfg.materials)
         {
             mats.push_back(cwf::physics::materials::make_properties(mat));
@@ -151,8 +152,9 @@ TEST(OutputManagerTests, EnforcesStrideAndProbes)
     ASSERT_TRUE(pack_result.has_value());
     auto pack = std::move(pack_result.value());
 
-    const auto materials = [&cfg]() {
+    const auto materials = [&cfg]() -> std::vector<cwf::physics::materials::ElasticProperties> {
         std::vector<cwf::physics::materials::ElasticProperties> mats{};
+        mats.reserve(cfg.materials.size());
         for (const auto &mat : cfg.materials)
         {
             mats.push_back(cwf::physics::materials::make_properties(mat));
@@ -160,7 +162,7 @@ TEST(OutputManagerTests, EnforcesStrideAndProbes)
         return mats;
     }();
 
-    cwf::config::OutputSettings settings{.vtu_stride = 2U, .probes = {0U}};
+    cwf::config::OutputSettings const settings{.vtu_stride = 2U, .probes = {0U}};
     const auto                  out_dir = std::filesystem::temp_directory_path() / "cwf_vtu_test_manager";
     cwf::post::OutputManager    manager(out_dir, mesh, pack, materials, settings);
 

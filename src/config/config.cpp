@@ -22,7 +22,7 @@ namespace
 
 [[nodiscard]] auto make_error(std::string message, std::vector<std::string> ctx) -> ConfigResult
 {
-    return std::unexpected(ConfigError{std::move(message), std::move(ctx)});
+    return std::unexpected(ConfigError{.message = std::move(message), .context = std::move(ctx)});
 }
 
 [[nodiscard]] auto make_scalar_error(const std::string &expectation, std::vector<std::string> ctx)
@@ -36,7 +36,8 @@ namespace
 {
     if (!node || !node.IsSequence() || node.size() != 3U)
     {
-        return std::unexpected(ConfigError{"expected sequence[3] for vector", std::move(ctx)});
+        return std::unexpected(
+            ConfigError{.message = "expected sequence[3] for vector", .context = std::move(ctx)});
     }
     std::array<double, 3> values{};
     for (std::size_t i = 0; i < 3; ++i)
@@ -49,7 +50,7 @@ namespace
         {
             auto child_ctx = ctx;
             child_ctx.emplace_back(std::format("[{}]", i));
-            return std::unexpected(ConfigError{ex.what(), std::move(child_ctx)});
+            return std::unexpected(ConfigError{.message = ex.what(), .context = std::move(child_ctx)});
         }
     }
     return values;
@@ -65,7 +66,8 @@ namespace
     }
     if (!node.IsSequence() || node.size() != 3U)
     {
-        return std::unexpected(ConfigError{"expected sequence[3] for value override", std::move(ctx)});
+        return std::unexpected(
+            ConfigError{.message = "expected sequence[3] for value override", .context = std::move(ctx)});
     }
     for (std::size_t i = 0; i < 3; ++i)
     {
@@ -82,7 +84,7 @@ namespace
         {
             auto child_ctx = ctx;
             child_ctx.emplace_back(std::format("[{}]", i));
-            return std::unexpected(ConfigError{ex.what(), std::move(child_ctx)});
+            return std::unexpected(ConfigError{.message = ex.what(), .context = std::move(child_ctx)});
         }
     }
     return result;
@@ -93,7 +95,8 @@ namespace
 {
     if (!node || !node.IsSequence())
     {
-        return std::unexpected(ConfigError{"expected sequence for string list", std::move(ctx)});
+        return std::unexpected(
+            ConfigError{.message = "expected sequence for string list", .context = std::move(ctx)});
     }
     std::vector<std::string> items;
     items.reserve(node.size());
@@ -107,7 +110,7 @@ namespace
         {
             auto child_ctx = ctx;
             child_ctx.emplace_back(std::format("[{}]", i));
-            return std::unexpected(ConfigError{ex.what(), std::move(child_ctx)});
+            return std::unexpected(ConfigError{.message = ex.what(), .context = std::move(child_ctx)});
         }
     }
     return items;

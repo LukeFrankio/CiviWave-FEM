@@ -27,10 +27,10 @@ using cwf::post::compute_derived_fields;
 {
     cwf::mesh::Mesh mesh{};
     mesh.nodes = {
-        cwf::mesh::Node{0U, cwf::common::Vec3{0.0, 0.0, 0.0}},
-        cwf::mesh::Node{1U, cwf::common::Vec3{1.0, 0.0, 0.0}},
-        cwf::mesh::Node{2U, cwf::common::Vec3{0.0, 1.0, 0.0}},
-        cwf::mesh::Node{3U, cwf::common::Vec3{0.0, 0.0, 1.0}},
+        cwf::mesh::Node{.original_id = 0U, .position = cwf::common::Vec3{0.0, 0.0, 0.0}},
+        cwf::mesh::Node{.original_id = 1U, .position = cwf::common::Vec3{1.0, 0.0, 0.0}},
+        cwf::mesh::Node{.original_id = 2U, .position = cwf::common::Vec3{0.0, 1.0, 0.0}},
+        cwf::mesh::Node{.original_id = 3U, .position = cwf::common::Vec3{0.0, 0.0, 1.0}},
     };
     mesh.physical_groups.push_back(cwf::mesh::PhysicalGroup{.dimension = 3U, .id = 1U, .name = "SOLID"});
     mesh.group_lookup.emplace(1U, 0U);
@@ -99,7 +99,7 @@ TEST(DerivedFields, ComputesUniformXStrain)
 
     const auto preprocess_result = cwf::mesh::pre::run(mesh, cfg);
     ASSERT_TRUE(preprocess_result.has_value());
-    const auto preprocess = preprocess_result.value();
+    const auto &preprocess = preprocess_result.value();
 
     auto pack_result = cwf::mesh::pack::build_packed_buffers(mesh, preprocess, cfg, {});
     ASSERT_TRUE(pack_result.has_value());
@@ -107,11 +107,11 @@ TEST(DerivedFields, ComputesUniformXStrain)
 
     const auto materials = make_materials(cfg);
 
-    constexpr double kStrain = 0.01; // 1% stretch along X
+    constexpr double k_strain = 0.01; // 1% stretch along X
     for (std::size_t node = 0; node < mesh.nodes.size(); ++node)
     {
         const double x                          = mesh.nodes[node].position[0];
-        pack.buffers.nodes.displacement.x[node] = static_cast<float>(kStrain * x);
+        pack.buffers.nodes.displacement.x[node] = static_cast<float>(k_strain * x);
         pack.buffers.nodes.displacement.y[node] = 0.0F;
         pack.buffers.nodes.displacement.z[node] = 0.0F;
     }
@@ -121,7 +121,7 @@ TEST(DerivedFields, ComputesUniformXStrain)
     ASSERT_EQ(derived.nodes.size(), pack.metadata.node_count);
 
     const auto &elem = derived.elements.front();
-    EXPECT_NEAR(elem.strain[0], kStrain, 1.0e-5F);
+    EXPECT_NEAR(elem.strain[0], k_strain, 1.0e-5F);
     EXPECT_NEAR(elem.strain[1], 0.0F, 1.0e-5F);
     EXPECT_NEAR(elem.strain[2], 0.0F, 1.0e-5F);
     EXPECT_NEAR(elem.strain[3], 0.0F, 1.0e-5F);
@@ -130,8 +130,8 @@ TEST(DerivedFields, ComputesUniformXStrain)
         (cfg.materials[0].poisson_ratio * cfg.materials[0].youngs_modulus) /
         ((1.0 + cfg.materials[0].poisson_ratio) * (1.0 - 2.0 * cfg.materials[0].poisson_ratio));
     const double mu = cfg.materials[0].youngs_modulus / (2.0 * (1.0 + cfg.materials[0].poisson_ratio));
-    const double expected_sx = (lambda + 2.0 * mu) * kStrain;
-    const double expected_sy = lambda * kStrain;
+    const double expected_sx = (lambda + 2.0 * mu) * k_strain;
+    const double expected_sy = lambda * k_strain;
 
     EXPECT_NEAR(elem.stress[0], static_cast<float>(expected_sx), 5.0e3F);
     EXPECT_NEAR(elem.stress[1], static_cast<float>(expected_sy), 5.0e3F);
@@ -139,7 +139,7 @@ TEST(DerivedFields, ComputesUniformXStrain)
 
     for (const auto &node_field : derived.nodes)
     {
-        EXPECT_NEAR(node_field.strain[0], kStrain, 1.0e-4F);
+        EXPECT_NEAR(node_field.strain[0], k_strain, 1.0e-4F);
         EXPECT_NEAR(node_field.stress[0], static_cast<float>(expected_sx), 5.0e3F);
     }
 }

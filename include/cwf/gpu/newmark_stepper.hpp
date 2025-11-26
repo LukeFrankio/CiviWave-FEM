@@ -102,7 +102,7 @@ class Stepper
      */
     Stepper(mesh::pack::PackingResult                             &packing,
             std::span<const physics::materials::ElasticProperties> materials,
-            physics::materials::RayleighCoefficients rayleigh, const config::SolverSettings &solver_settings,
+            physics::materials::RayleighCoefficients rayleigh, config::SolverSettings solver_settings,
             const config::TimeSettings &time_settings, AdaptivePolicy adaptive_policy = {});
 
     ~Stepper();
@@ -166,6 +166,10 @@ class Stepper
     config::TimeSettings                               time_settings_{};
     AdaptivePolicy                                     adaptive_policy_{};
 
+    double      current_dt_{};  ///< moved before matrix_system_ to match initializer order
+    double      accumulated_time_{0.0};
+    std::size_t frame_index_{0};
+
     pcg::MatrixFreeSystem    matrix_system_{};
     pcg::MatrixFreeSystem    stiffness_only_system_{};
     pcg::MatrixFreeWorkspace matrix_workspace_{};
@@ -179,9 +183,6 @@ class Stepper
     mesh::pack::Float3SoA predicted_displacement_{};
     mesh::pack::Float3SoA predicted_velocity_{};
 
-    double      current_dt_{};
-    double      accumulated_time_{0.0};
-    std::size_t frame_index_{0};
     bool        warm_start_enabled_{true};
     double      beta_{0.25};
     double      gamma_{0.5};

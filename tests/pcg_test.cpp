@@ -3,6 +3,7 @@
  * @brief unit tests for Phase 8 matrix-free K_eff apply + PCG solver uwu
  */
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <filesystem>
@@ -35,10 +36,10 @@ constexpr std::size_t kMaxIterations = 64U;
 {
     cwf::mesh::Mesh mesh{};
     mesh.nodes = {
-        cwf::mesh::Node{0U, cwf::common::Vec3{0.0, 0.0, 0.0}},
-        cwf::mesh::Node{1U, cwf::common::Vec3{1.0, 0.0, 0.0}},
-        cwf::mesh::Node{2U, cwf::common::Vec3{0.0, 1.0, 0.0}},
-        cwf::mesh::Node{3U, cwf::common::Vec3{0.0, 0.0, 1.0}},
+        cwf::mesh::Node{.original_id = 0U, .position = cwf::common::Vec3{0.0, 0.0, 0.0}},
+        cwf::mesh::Node{.original_id = 1U, .position = cwf::common::Vec3{1.0, 0.0, 0.0}},
+        cwf::mesh::Node{.original_id = 2U, .position = cwf::common::Vec3{0.0, 1.0, 0.0}},
+        cwf::mesh::Node{.original_id = 3U, .position = cwf::common::Vec3{0.0, 0.0, 1.0}},
     };
 
     cwf::mesh::Element tet{};
@@ -63,9 +64,9 @@ constexpr std::size_t kMaxIterations = 64U;
     mesh.surfaces.push_back(fixed);
 
     mesh.physical_groups = {
-        cwf::mesh::PhysicalGroup{3U, 1U, "SOLID"},
-        cwf::mesh::PhysicalGroup{2U, 2U, "FIXED"},
-        cwf::mesh::PhysicalGroup{0U, 3U, "POINT"},
+        cwf::mesh::PhysicalGroup{.dimension = 3U, .id = 1U, .name = "SOLID"},
+        cwf::mesh::PhysicalGroup{.dimension = 2U, .id = 2U, .name = "FIXED"},
+        cwf::mesh::PhysicalGroup{.dimension = 0U, .id = 3U, .name = "POINT"},
     };
     for (std::size_t i = 0; i < mesh.physical_groups.size(); ++i)
     {
@@ -226,9 +227,9 @@ TEST(PcgPhase8, MatrixFreeApplyMatchesDense)
     {
         input[i] = static_cast<float>(0.1 * static_cast<double>(i + 1));
     }
-    std::vector<double> input_double(input.begin(), input.end());
+    std::vector<double> const input_double(input.begin(), input.end());
 
-    cwf::gpu::pcg::MatrixFreeSystem system{
+    cwf::gpu::pcg::MatrixFreeSystem const system{
         .element_connectivity   = std::span<const std::uint32_t>{pack.buffers.elements.connectivity},
         .element_gradients      = std::span<const float>{pack.buffers.elements.gradients},
         .element_volume         = std::span<const float>{pack.buffers.elements.volume},
@@ -254,7 +255,7 @@ TEST(PcgPhase8, MatrixFreeApplyMatchesDense)
     for (std::size_t dof = 0; dof < dof_count; ++dof)
     {
         const double ref      = dense_output[dof];
-        const double got      = static_cast<double>(output[dof]);
+        const auto   got      = static_cast<double>(output[dof]);
         const double abs_diff = std::abs(ref - got);
         const double tol      = std::max(1.0e-4, kRelativeTol * std::abs(ref));
         EXPECT_LE(abs_diff, tol) << "DOF mismatch at index " << dof << " (ref=" << ref << ", got=" << got
@@ -304,7 +305,7 @@ TEST(PcgPhase8, PcgMatchesCpuNewmark)
         cwf::physics::solver::solve_newmark_step(assembly, rayleigh, dirichlet, mesh, cfg, pre, coeffs,
                                                  previous, /*time=*/0.0, kRelativeTol, kMaxIterations);
 
-    cwf::gpu::pcg::MatrixFreeSystem system{
+    cwf::gpu::pcg::MatrixFreeSystem const system{
         .element_connectivity   = std::span<const std::uint32_t>{pack.buffers.elements.connectivity},
         .element_gradients      = std::span<const float>{pack.buffers.elements.gradients},
         .element_volume         = std::span<const float>{pack.buffers.elements.volume},
@@ -325,19 +326,19 @@ TEST(PcgPhase8, PcgMatchesCpuNewmark)
 
     auto &solver_buffers = pack.buffers.solver;
     auto &partials       = solver_buffers.partials;
-    std::fill(solver_buffers.p.begin(), solver_buffers.p.end(), 0.0F);
-    std::fill(solver_buffers.r.begin(), solver_buffers.r.end(), 0.0F);
-    std::fill(solver_buffers.Ap.begin(), solver_buffers.Ap.end(), 0.0F);
-    std::fill(solver_buffers.z.begin(), solver_buffers.z.end(), 0.0F);
-    std::fill(solver_buffers.x.begin(), solver_buffers.x.end(), 0.0F);
-    std::fill(partials.begin(), partials.end(), 0.0);
+    std::ranges::fill(solver_buffers.p, 0.0F);
+    std::ranges::fill(solver_buffers.r, 0.0F);
+    std::ranges::fill(solver_buffers.ap, 0.0F);
+    std::ranges::fill(solver_buffers.z, 0.0F);
+    std::ranges::fill(solver_buffers.x, 0.0F);
+    std::ranges::fill(partials, 0.0);
 
-    cwf::gpu::pcg::PcgVectors vectors{
+    cwf::gpu::pcg::PcgVectors const vectors{
         .solution         = std::span<float>(solver_buffers.x.data(), solver_buffers.x.size()),
         .residual         = std::span<float>(solver_buffers.r.data(), solver_buffers.r.size()),
         .search_direction = std::span<float>(solver_buffers.p.data(), solver_buffers.p.size()),
         .preconditioned   = std::span<float>(solver_buffers.z.data(), solver_buffers.z.size()),
-        .matvec           = std::span<float>(solver_buffers.Ap.data(), solver_buffers.Ap.size()),
+        .matvec           = std::span<float>(solver_buffers.ap.data(), solver_buffers.ap.size()),
         .partials         = std::span<double>(partials.data(), partials.size()),
     };
 

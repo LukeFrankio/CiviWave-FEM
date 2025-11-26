@@ -180,9 +180,9 @@ using Vec3 = std::array<double, 3>;
  */
 [[nodiscard]] inline auto safe_normalize(const Vec3 &value) noexcept -> Vec3
 {
-    constexpr double kThreshold = 1.0e-12;
+    constexpr double k_threshold = 1.0e-12;
     const auto       mag        = magnitude(value);
-    if (mag < kThreshold || !std::isfinite(mag))
+    if (mag < k_threshold || !std::isfinite(mag))
     {
         return Vec3{0.0, 0.0, 0.0};
     }

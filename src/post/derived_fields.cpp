@@ -171,11 +171,11 @@ auto compute_derived_fields(const mesh::pack::PackingResult                     
             }
 
             const auto   displacement = fetch_displacement(buffers.nodes.displacement, node_index);
-            const double grad_x =
+            const auto   grad_x =
                 static_cast<double>(buffers.elements.gradients[gradient_base + local * 3U + 0U]);
-            const double grad_y =
+            const auto grad_y =
                 static_cast<double>(buffers.elements.gradients[gradient_base + local * 3U + 1U]);
-            const double grad_z =
+            const auto grad_z =
                 static_cast<double>(buffers.elements.gradients[gradient_base + local * 3U + 2U]);
 
             strain[0] += grad_x * displacement[0];
@@ -189,7 +189,7 @@ auto compute_derived_fields(const mesh::pack::PackingResult                     
         const auto stress = stiffness_mul(material.stiffness, strain);
         store_element(fields.elements[elem], strain, stress);
 
-        const double volume = static_cast<double>(buffers.elements.volume[elem]);
+        const auto volume = static_cast<double>(buffers.elements.volume[elem]);
         for (std::size_t local = 0; local < local_count; ++local)
         {
             const auto node_index = buffers.elements.connectivity[conn_base + local];

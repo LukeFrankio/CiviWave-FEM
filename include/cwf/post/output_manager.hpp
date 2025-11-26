@@ -34,7 +34,7 @@ class OutputManager
   public:
     OutputManager(std::filesystem::path root, const mesh::Mesh &mesh, mesh::pack::PackingResult &packing,
                   std::span<const physics::materials::ElasticProperties> materials,
-                  config::OutputSettings                                 settings);
+                  const config::OutputSettings                          &settings);
 
     [[nodiscard]] auto handle_frame(double simulation_time, std::uint32_t frame_index)
         -> std::expected<void, OutputError>;

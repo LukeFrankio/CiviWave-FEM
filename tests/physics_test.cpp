@@ -49,17 +49,17 @@ constexpr double kEpsilon = 1.0e-9;
 {
     cwf::mesh::Mesh mesh{};
     mesh.nodes = {
-        cwf::mesh::Node{1U, cwf::common::Vec3{0.0, 0.0, 0.0}},
-        cwf::mesh::Node{2U, cwf::common::Vec3{1.0, 0.0, 0.0}},
-        cwf::mesh::Node{3U, cwf::common::Vec3{0.0, 1.0, 0.0}},
-        cwf::mesh::Node{4U, cwf::common::Vec3{0.0, 0.0, 1.0}},
+        cwf::mesh::Node{.original_id = 1U, .position = cwf::common::Vec3{0.0, 0.0, 0.0}},
+        cwf::mesh::Node{.original_id = 2U, .position = cwf::common::Vec3{1.0, 0.0, 0.0}},
+        cwf::mesh::Node{.original_id = 3U, .position = cwf::common::Vec3{0.0, 1.0, 0.0}},
+        cwf::mesh::Node{.original_id = 4U, .position = cwf::common::Vec3{0.0, 0.0, 1.0}},
     };
 
     mesh.physical_groups = {
-        cwf::mesh::PhysicalGroup{2U, 10U, "FIXED"},
-        cwf::mesh::PhysicalGroup{2U, 11U, "LOAD_FACE"},
-        cwf::mesh::PhysicalGroup{3U, 12U, "SOLID"},
-        cwf::mesh::PhysicalGroup{0U, 13U, "POINT_LOAD"},
+        cwf::mesh::PhysicalGroup{.dimension = 2U, .id = 10U, .name = "FIXED"},
+        cwf::mesh::PhysicalGroup{.dimension = 2U, .id = 11U, .name = "LOAD_FACE"},
+        cwf::mesh::PhysicalGroup{.dimension = 3U, .id = 12U, .name = "SOLID"},
+        cwf::mesh::PhysicalGroup{.dimension = 0U, .id = 13U, .name = "POINT_LOAD"},
     };
     for (std::size_t i = 0; i < mesh.physical_groups.size(); ++i)
     {
@@ -121,50 +121,58 @@ class SolverFixture : public ::testing::Test
   protected:
     void SetUp() override
     {
-        mesh_ = synthetic_mesh_for_loads();
+        mesh = synthetic_mesh_for_loads();
 
-        cfg_.mesh_path = "synthetic.msh";
-        cfg_.materials.push_back(cwf::config::Material{"test_material", 7.0e10, 0.25, 1000.0});
-        cfg_.assignments.push_back(cwf::config::Assignment{"SOLID", "test_material"});
-        cfg_.damping   = cwf::config::Damping{0.02, 5.0, 50.0};
-        cfg_.time      = cwf::config::TimeSettings{0.01, false, 0.005, 0.02};
-        cfg_.solver    = cwf::config::SolverSettings{"pcg", "diag", 1.0e-8, 1.0e-9, 128U};
-        cfg_.precision = cwf::config::PrecisionSettings{"fp32", "fp64"};
+        cfg.mesh_path = "synthetic.msh";
+        cfg.materials.push_back(cwf::config::Material{
+            .name = "test_material", .youngs_modulus = 7.0e10, .poisson_ratio = 0.25, .density = 1000.0});
+        cfg.assignments.push_back(cwf::config::Assignment{.group = "SOLID", .material = "test_material"});
+        cfg.damping = cwf::config::Damping{.xi = 0.02, .w1 = 5.0, .w2 = 50.0};
+        cfg.time =
+            cwf::config::TimeSettings{.initial_dt = 0.01, .adaptive = false, .min_dt = 0.005, .max_dt = 0.02};
+        cfg.solver = cwf::config::SolverSettings{.type              = "pcg",
+                                                 .preconditioner    = "diag",
+                                                 .runtime_tolerance = 1.0e-8,
+                                                 .pause_tolerance   = 1.0e-9,
+                                                 .max_iterations    = 128U};
+        cfg.precision =
+            cwf::config::PrecisionSettings{.vector_precision = "fp32", .reduction_precision = "fp64"};
 
-        cfg_.loads.gravity = {0.0, 0.0, 0.0};
-        cfg_.loads.tractions.clear();
-        cfg_.loads.points.clear();
+        cfg.loads.gravity = {0.0, 0.0, 0.0};
+        cfg.loads.tractions.clear();
+        cfg.loads.points.clear();
 
-        cfg_.curves.clear();
-        cfg_.dirichlet.push_back(cwf::config::DirichletFix{"FIXED", {true, true, true}, {0.0, 0.0, 0.0}});
-        cfg_.output = cwf::config::OutputSettings{10U, {}};
+        cfg.curves.clear();
+        cfg.dirichlet.push_back(cwf::config::DirichletFix{
+            .group = "FIXED", .constrain_axis = {true, true, true}, .value = {0.0, 0.0, 0.0}});
+        cfg.output = cwf::config::OutputSettings{.vtu_stride = 10U, .probes = {}};
 
-        auto preprocess_result = cwf::mesh::pre::run(mesh_, cfg_);
+        auto preprocess_result = cwf::mesh::pre::run(mesh, cfg);
         ASSERT_TRUE(preprocess_result.has_value()) << preprocess_result.error().message;
-        preprocess_ = std::move(preprocess_result.value());
+        preprocess = std::move(preprocess_result.value());
 
-        materials_.clear();
-        materials_.reserve(cfg_.materials.size());
-        for (const auto &mat : cfg_.materials)
+        materials.clear();
+        materials.reserve(cfg.materials.size());
+        for (const auto &mat : cfg.materials)
         {
-            materials_.push_back(cwf::physics::materials::make_properties(mat));
+            materials.push_back(cwf::physics::materials::make_properties(mat));
         }
-        rayleigh_ = cwf::physics::materials::compute_rayleigh(cfg_.damping);
-        coeffs_   = cwf::physics::newmark::make_coefficients(cfg_.time.initial_dt);
+        rayleigh = cwf::physics::materials::compute_rayleigh(cfg.damping);
+        coeffs   = cwf::physics::newmark::make_coefficients(cfg.time.initial_dt);
 
-        const std::size_t dofs = mesh_.nodes.size() * 3U;
-        state_.displacement.assign(dofs, 0.0);
-        state_.velocity.assign(dofs, 0.0);
-        state_.acceleration.assign(dofs, 0.0);
+        const std::size_t dofs = mesh.nodes.size() * 3U;
+        state.displacement.assign(dofs, 0.0);
+        state.velocity.assign(dofs, 0.0);
+        state.acceleration.assign(dofs, 0.0);
     }
 
-    cwf::mesh::Mesh                                         mesh_{};
-    cwf::config::Config                                     cfg_{};
-    cwf::mesh::pre::Outputs                                 preprocess_{};
-    std::vector<cwf::physics::materials::ElasticProperties> materials_{};
-    cwf::physics::materials::RayleighCoefficients           rayleigh_{};
-    cwf::physics::newmark::Coefficients                     coeffs_{};
-    cwf::physics::newmark::State                            state_{};
+    cwf::mesh::Mesh                                         mesh{};
+    cwf::config::Config                                     cfg{};
+    cwf::mesh::pre::Outputs                                 preprocess{};
+    std::vector<cwf::physics::materials::ElasticProperties> materials;
+    cwf::physics::materials::RayleighCoefficients           rayleigh{};
+    cwf::physics::newmark::Coefficients                     coeffs{};
+    cwf::physics::newmark::State                            state{};
 };
 
 // -----------------------------------------------------------------------------
@@ -202,8 +210,10 @@ TEST(LoadAssembly, CombinesGravitySurfaceTractionAndPointLoads)
 
     cwf::config::Config cfg{};
     cfg.loads.gravity = {0.0, 0.0, -9.81};
-    cfg.loads.tractions.push_back(cwf::config::SurfaceTraction{"LOAD_FACE", {0.0, 0.0, -5000.0}, ""});
-    cfg.loads.points.push_back(cwf::config::PointLoad{"POINT_LOAD", {0.0, 0.0, -200.0}, ""});
+    cfg.loads.tractions.push_back(
+        cwf::config::SurfaceTraction{.group = "LOAD_FACE", .value = {0.0, 0.0, -5000.0}, .scale_curve = ""});
+    cfg.loads.points.push_back(
+        cwf::config::PointLoad{.group = "POINT_LOAD", .value = {0.0, 0.0, -200.0}, .scale_curve = ""});
 
     cwf::mesh::pre::Outputs preprocess{};
     preprocess.lumped_mass = {41.666666666666664, 41.666666666666664, 41.666666666666664, 41.666666666666664};
@@ -247,7 +257,7 @@ TEST(NewmarkEffectiveStiffness, ScalesStiffnessAndAddsMass)
     const std::vector<double> stiffness{10.0, 2.0, 2.0, 6.0};
     const std::vector<double> mass_diag{4.0, 8.0};
     const auto                coeffs   = cwf::physics::newmark::make_coefficients(0.1, 0.25, 0.5);
-    const auto                rayleigh = cwf::physics::materials::RayleighCoefficients{0.01, 0.02};
+    const auto rayleigh = cwf::physics::materials::RayleighCoefficients{.alpha = 0.01, .beta = 0.02};
 
     const auto keff =
         cwf::physics::newmark::build_effective_stiffness(stiffness, mass_diag, rayleigh, coeffs);
@@ -268,7 +278,7 @@ TEST(NewmarkEffectiveRhs, BuildsConsistentForceVector)
     const std::vector<double> stiffness{4.0, 1.0, 1.0, 2.0};
     const std::vector<double> mass_diag{2.0, 3.0};
     const auto                coeffs   = cwf::physics::newmark::make_coefficients(0.05, 0.25, 0.5);
-    const auto                rayleigh = cwf::physics::materials::RayleighCoefficients{0.0, 0.1};
+    const auto rayleigh = cwf::physics::materials::RayleighCoefficients{.alpha = 0.0, .beta = 0.1};
 
     cwf::physics::newmark::State state{};
     state.displacement = {0.1, -0.2};
@@ -386,8 +396,8 @@ TEST(NewmarkUpdate, ProducesConsistentKinematics)
 
 TEST_F(SolverFixture, AssembleLinearSystemProducesSymmetricMatrix)
 {
-    const auto        assembly = cwf::physics::solver::assemble_linear_system(mesh_, preprocess_, materials_);
-    const std::size_t n        = mesh_.nodes.size() * 3U;
+    const auto        assembly = cwf::physics::solver::assemble_linear_system(mesh, preprocess, materials);
+    const std::size_t n        = mesh.nodes.size() * 3U;
     ASSERT_EQ(assembly.stiffness.size(), n * n);
 
     for (std::size_t row = 0; row < n; ++row)
@@ -406,8 +416,8 @@ TEST_F(SolverFixture, AssembleLinearSystemProducesSymmetricMatrix)
 
 TEST_F(SolverFixture, BuildDirichletConditionsLocksSurfaceNodes)
 {
-    const auto        conditions = cwf::physics::solver::build_dirichlet_conditions(mesh_, cfg_);
-    const std::size_t n          = mesh_.nodes.size() * 3U;
+    const auto        conditions = cwf::physics::solver::build_dirichlet_conditions(mesh, cfg);
+    const std::size_t n          = mesh.nodes.size() * 3U;
     ASSERT_EQ(conditions.mask.size(), n);
     ASSERT_EQ(conditions.targets.size(), n);
 
@@ -430,15 +440,14 @@ TEST_F(SolverFixture, BuildDirichletConditionsLocksSurfaceNodes)
 
 TEST_F(SolverFixture, SolveNewmarkStepMaintainsDirichletConstraints)
 {
-    const auto        assembly = cwf::physics::solver::assemble_linear_system(mesh_, preprocess_, materials_);
-    const auto        dirichlet      = cwf::physics::solver::build_dirichlet_conditions(mesh_, cfg_);
+    const auto        assembly  = cwf::physics::solver::assemble_linear_system(mesh, preprocess, materials);
+    const auto        dirichlet = cwf::physics::solver::build_dirichlet_conditions(mesh, cfg);
     const double      time           = 0.0;
     const double      tolerance      = 1.0e-8;
     const std::size_t max_iterations = 256U;
 
-    const auto result =
-        cwf::physics::solver::solve_newmark_step(assembly, rayleigh_, dirichlet, mesh_, cfg_, preprocess_,
-                                                 coeffs_, state_, time, tolerance, max_iterations);
+    const auto result = cwf::physics::solver::solve_newmark_step(
+        assembly, rayleigh, dirichlet, mesh, cfg, preprocess, coeffs, state, time, tolerance, max_iterations);
 
     EXPECT_TRUE(result.stats.converged);
     EXPECT_LT(result.stats.residual_norm, 1.0);

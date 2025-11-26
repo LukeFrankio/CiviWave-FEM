@@ -145,7 +145,7 @@ auto DeviceBufferArena::create(const VulkanContext &context, const mesh::pack::P
     {
         return std::unexpected(make_error(layout_expected.error().message, layout_expected.error().context));
     }
-    const auto layout = layout_expected.value();
+    const auto &layout = layout_expected.value();
 
     std::unordered_map<std::string, shard::ShardSegment> segments_by_name;
     for (const auto &segment : layout.segments)
@@ -185,7 +185,8 @@ auto DeviceBufferArena::create(const VulkanContext &context, const mesh::pack::P
                 make_error("vmaCreateBuffer failed", result, {"device buffer", std::to_string(i)}));
         }
 
-        arena.device_buffers_.push_back(DeviceBuffer{buffer, allocation, buffer_info.size});
+        arena.device_buffers_.push_back(
+            DeviceBuffer{.buffer = buffer, .allocation = allocation, .size = buffer_info.size});
         context.set_object_name(reinterpret_cast<std::uint64_t>(buffer), VK_OBJECT_TYPE_BUFFER,
                                 std::format("cwf_device_buffer_{}", i));
     }

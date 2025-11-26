@@ -231,7 +231,7 @@ void run_physics_step(const cwf::mesh::Mesh &mesh, const cwf::config::Config &cf
 
 } // namespace
 
-int main()
+auto main() -> int
 {
 #if !(defined(CWF_ENABLE_UI) && CWF_ENABLE_UI)
     std::print(stderr, "viewer_demo was built without UI support. Reconfigure with -DBUILD_UI=ON.\n");

@@ -117,18 +117,18 @@ namespace cwf::physics::materials
 {
     const double denom  = (1.0 + poisson_ratio) * (1.0 - 2.0 * poisson_ratio);
     const double lambda = (poisson_ratio * youngs_modulus) / denom;
-    const double mu     = youngs_modulus / (2.0 * (1.0 + poisson_ratio));
-    return LamePair{lambda, mu};
+    const double mu_val     = youngs_modulus / (2.0 * (1.0 + poisson_ratio));
+    return LamePair{.lambda = lambda, .mu = mu_val};
 }
 
 [[nodiscard]] constexpr auto make_stiffness_matrix(double youngs_modulus, double poisson_ratio) noexcept
     -> std::array<double, 36>
 {
     const auto   lame = compute_lame(youngs_modulus, poisson_ratio);
-    const double c    = lame.lambda + 2.0 * lame.mu;
+    const double c_val    = lame.lambda + 2.0 * lame.mu;
 
-    return {c,   lame.lambda, lame.lambda, 0.0,         0.0,         0.0, lame.lambda, c,   lame.lambda,
-            0.0, 0.0,         0.0,         lame.lambda, lame.lambda, c,   0.0,         0.0, 0.0,
+    return {c_val,   lame.lambda, lame.lambda, 0.0,         0.0,         0.0, lame.lambda, c_val,   lame.lambda,
+            0.0, 0.0,         0.0,         lame.lambda, lame.lambda, c_val,   0.0,         0.0, 0.0,
             0.0, 0.0,         0.0,         lame.mu,     0.0,         0.0, 0.0,         0.0, 0.0,
             0.0, lame.mu,     0.0,         0.0,         0.0,         0.0, 0.0,         0.0, lame.mu};
 }
@@ -138,12 +138,12 @@ namespace cwf::physics::materials
     const auto   lame  = compute_lame(material.youngs_modulus, material.poisson_ratio);
     const double bulk  = lame.lambda + (2.0 / 3.0) * lame.mu;
     const double shear = lame.mu;
-    return ElasticProperties{material.youngs_modulus,
-                             material.poisson_ratio,
-                             bulk,
-                             shear,
-                             lame,
-                             make_stiffness_matrix(material.youngs_modulus, material.poisson_ratio)};
+    return ElasticProperties{.youngs_modulus = material.youngs_modulus,
+                             .poisson_ratio = material.poisson_ratio,
+                             .bulk_modulus = bulk,
+                             .shear_modulus = shear,
+                             .lame = lame,
+                             .stiffness = make_stiffness_matrix(material.youngs_modulus, material.poisson_ratio)};
 }
 
 [[nodiscard]] constexpr auto compute_rayleigh(const config::Damping &damping) noexcept -> RayleighCoefficients
@@ -151,7 +151,7 @@ namespace cwf::physics::materials
     const double denom = damping.w1 + damping.w2;
     const double alpha = 2.0 * damping.xi * damping.w1 * damping.w2 / denom;
     const double beta  = 2.0 * damping.xi / denom;
-    return RayleighCoefficients{alpha, beta};
+    return RayleighCoefficients{.alpha = alpha, .beta = beta};
 }
 
 } // namespace cwf::physics::materials

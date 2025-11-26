@@ -72,8 +72,9 @@ TEST(ConfigValidation, LoadsConfigFromFixtureOnDisk)
 TEST(ConfigValidation, ParsesPointLoadsWithOptionalCurve)
 {
     cwf::test_support::ConfigBuilderOptions options;
-    options.point_loads = {{"FIXED_BASE", {0.0, 0.0, -1234.5}, "load_curve1"},
-                           {"LOAD_FACE", {10.0, 0.0, 0.0}, {}}};
+    options.point_loads = {
+        {.group = "FIXED_BASE", .value = {0.0, 0.0, -1234.5}, .scale_curve = "load_curve1"},
+        {.group = "LOAD_FACE", .value = {10.0, 0.0, 0.0}, .scale_curve = {}}};
     const auto yaml     = cwf::test_support::make_config_yaml(options);
     const auto parsed   = cwf::config::load_config_from_string(yaml);
     ASSERT_TRUE(parsed.has_value()) << parsed.error().message;
@@ -112,7 +113,7 @@ TEST_P(ConfigInvalidTest, ReportsDetailedValidationErrors)
     }
 }
 
-auto make_invalid_cases() -> std::vector<InvalidConfigCase>
+static auto make_invalid_cases() -> std::vector<InvalidConfigCase>
 {
     using cwf::test_support::AssignmentSpec;
     using cwf::test_support::ConfigBuilderOptions;
@@ -126,157 +127,202 @@ auto make_invalid_cases() -> std::vector<InvalidConfigCase>
     {
         ConfigBuilderOptions opts{};
         opts.include_mesh = false;
-        cases.push_back({"MissingMeshSection", opts, "missing 'mesh' section", {"mesh"}, nullptr});
+        cases.push_back({.name                       = "MissingMeshSection",
+                         .options                    = opts,
+                         .expected_message_substring = "missing 'mesh' section",
+                         .expected_context           = {"mesh"},
+                         .mutate_yaml                = nullptr});
     }
 
     {
         ConfigBuilderOptions opts{};
-        opts.materials = {MaterialSpec{"concrete", -1.0, 0.2, 2500.0}};
-        cases.push_back(
-            {"NegativeYoungsModulus", opts, "material.E must be > 0", {"materials", "[0]", "E"}, nullptr});
+        opts.materials = {MaterialSpec{
+            .name = "concrete", .youngs_modulus = -1.0, .poisson_ratio = 0.2, .density = 2500.0}};
+        cases.push_back({.name                       = "NegativeYoungsModulus",
+                         .options                    = opts,
+                         .expected_message_substring = "material.E must be > 0",
+                         .expected_context           = {"materials", "[0]", "E"},
+                         .mutate_yaml                = nullptr});
     }
 
     {
         ConfigBuilderOptions opts{};
-        opts.materials = {MaterialSpec{"concrete", 3.0e10, 0.75, 2500.0}};
-        cases.push_back({"PoissonRatioTooLarge",
-                         opts,
-                         "material.nu must be (-0.999, 0.5)",
-                         {"materials", "[0]", "nu"},
-                         nullptr});
+        opts.materials = {MaterialSpec{
+            .name = "concrete", .youngs_modulus = 3.0e10, .poisson_ratio = 0.75, .density = 2500.0}};
+        cases.push_back({.name                       = "PoissonRatioTooLarge",
+                         .options                    = opts,
+                         .expected_message_substring = "material.nu must be (-0.999, 0.5)",
+                         .expected_context           = {"materials", "[0]", "nu"},
+                         .mutate_yaml                = nullptr});
     }
 
     {
         ConfigBuilderOptions opts{};
-        opts.materials = {MaterialSpec{"duplicate", 3.0e10, 0.2, 2500.0},
-                          MaterialSpec{"duplicate", 1.0e11, 0.3, 7800.0}};
-        cases.push_back({"DuplicateMaterialNames",
-                         opts,
-                         "material names must be unique",
-                         {"materials", "[1]", "name"},
-                         nullptr});
+        opts.materials = {
+            MaterialSpec{
+                .name = "duplicate", .youngs_modulus = 3.0e10, .poisson_ratio = 0.2, .density = 2500.0},
+            MaterialSpec{
+                .name = "duplicate", .youngs_modulus = 1.0e11, .poisson_ratio = 0.3, .density = 7800.0}};
+        cases.push_back({.name                       = "DuplicateMaterialNames",
+                         .options                    = opts,
+                         .expected_message_substring = "material names must be unique",
+                         .expected_context           = {"materials", "[1]", "name"},
+                         .mutate_yaml                = nullptr});
     }
 
     {
         ConfigBuilderOptions opts{};
-        opts.assignments = {AssignmentSpec{"SOLID", "missing"}};
-        cases.push_back({"AssignmentUnknownMaterial",
-                         opts,
-                         "assignment references unknown material",
-                         {"assignments", "[0]", "material"},
-                         nullptr});
+        opts.assignments = {AssignmentSpec{.group = "SOLID", .material = "missing"}};
+        cases.push_back({.name                       = "AssignmentUnknownMaterial",
+                         .options                    = opts,
+                         .expected_message_substring = "assignment references unknown material",
+                         .expected_context           = {"assignments", "[0]", "material"},
+                         .mutate_yaml                = nullptr});
     }
 
     {
         ConfigBuilderOptions opts{};
         opts.damping_xi = 1.2;
-        cases.push_back(
-            {"DampingXiOutOfRange", opts, "damping.xi must be (0,1)", {"damping", "xi"}, nullptr});
+        cases.push_back({.name                       = "DampingXiOutOfRange",
+                         .options                    = opts,
+                         .expected_message_substring = "damping.xi must be (0,1)",
+                         .expected_context           = {"damping", "xi"},
+                         .mutate_yaml                = nullptr});
     }
 
     {
         ConfigBuilderOptions opts{};
         opts.damping_w2 = 5.0;
         opts.damping_w1 = 10.0;
-        cases.push_back(
-            {"DampingW2TooSmall", opts, "damping.w2 must be > damping.w1", {"damping", "w2"}, nullptr});
+        cases.push_back({.name                       = "DampingW2TooSmall",
+                         .options                    = opts,
+                         .expected_message_substring = "damping.w2 must be > damping.w1",
+                         .expected_context           = {"damping", "w2"},
+                         .mutate_yaml                = nullptr});
     }
 
     {
         ConfigBuilderOptions opts{};
         opts.time_dt = -0.01;
-        cases.push_back({"NegativeTimeStep", opts, "time.dt must be > 0", {"time", "dt"}, nullptr});
+        cases.push_back({.name                       = "NegativeTimeStep",
+                         .options                    = opts,
+                         .expected_message_substring = "time.dt must be > 0",
+                         .expected_context           = {"time", "dt"},
+                         .mutate_yaml                = nullptr});
     }
 
     {
         ConfigBuilderOptions opts{};
         opts.time_min_dt = -0.01;
-        cases.push_back({"NegativeMinDt", opts, "time.min_dt must be >= 0", {"time", "min_dt"}, nullptr});
+        cases.push_back({.name                       = "NegativeMinDt",
+                         .options                    = opts,
+                         .expected_message_substring = "time.min_dt must be >= 0",
+                         .expected_context           = {"time", "min_dt"},
+                         .mutate_yaml                = nullptr});
     }
 
     {
         ConfigBuilderOptions opts{};
         opts.time_max_dt = 0.001;
-        cases.push_back(
-            {"MaxDtBelowInitial", opts, "time.max_dt must be >= time.dt", {"time", "max_dt"}, nullptr});
+        cases.push_back({.name                       = "MaxDtBelowInitial",
+                         .options                    = opts,
+                         .expected_message_substring = "time.max_dt must be >= time.dt",
+                         .expected_context           = {"time", "max_dt"},
+                         .mutate_yaml                = nullptr});
     }
 
     {
         ConfigBuilderOptions opts{};
         opts.solver_max_iters = 0U;
-        cases.push_back({"ZeroSolverIterations",
-                         opts,
-                         "solver.max_iters must be >= 1",
-                         {"solver", "max_iters"},
-                         nullptr});
+        cases.push_back({.name                       = "ZeroSolverIterations",
+                         .options                    = opts,
+                         .expected_message_substring = "solver.max_iters must be >= 1",
+                         .expected_context           = {"solver", "max_iters"},
+                         .mutate_yaml                = nullptr});
     }
 
     {
         ConfigBuilderOptions opts{};
         opts.solver_runtime_tol = -1.0;
-        cases.push_back(
-            {"NegativeSolverTolerance", opts, "solver tolerances must be > 0", {"solver"}, nullptr});
+        cases.push_back({.name                       = "NegativeSolverTolerance",
+                         .options                    = opts,
+                         .expected_message_substring = "solver tolerances must be > 0",
+                         .expected_context           = {"solver"},
+                         .mutate_yaml                = nullptr});
     }
 
     {
         ConfigBuilderOptions opts{};
         opts.include_precision = false;
-        cases.push_back({"MissingPrecisionSection", opts, "missing precision map", {"precision"}, nullptr});
+        cases.push_back({.name                       = "MissingPrecisionSection",
+                         .options                    = opts,
+                         .expected_message_substring = "missing precision map",
+                         .expected_context           = {"precision"},
+                         .mutate_yaml                = nullptr});
     }
 
     {
         ConfigBuilderOptions opts{};
-        opts.curves = {CurveSpec{"load_curve1", {{0.0, 0.0}, {0.6, 1.0}, {0.5, 1.1}}}};
-        cases.push_back({"CurveTimesNotMonotonic",
-                         opts,
-                         "curve times must be non-decreasing",
-                         {"curves", "load_curve1", "[2]"},
-                         nullptr});
+        opts.curves = {CurveSpec{.name = "load_curve1", .points = {{0.0, 0.0}, {0.6, 1.0}, {0.5, 1.1}}}};
+        cases.push_back({.name                       = "CurveTimesNotMonotonic",
+                         .options                    = opts,
+                         .expected_message_substring = "curve times must be non-decreasing",
+                         .expected_context           = {"curves", "load_curve1", "[2]"},
+                         .mutate_yaml                = nullptr});
     }
 
     {
         ConfigBuilderOptions opts{};
         opts.include_curves = false;
-        opts.tractions      = {TractionSpec{"LOAD_FACE", {0.0, 0.0, -1.0e5}, "load_curve1"}};
-        cases.push_back({"TractionUnknownCurve",
-                         opts,
-                         "traction references unknown curve",
-                         {"loads", "tractions", "[0]", "scale_curve"},
-                         nullptr});
+        opts.tractions      = {
+            TractionSpec{.group = "LOAD_FACE", .value = {0.0, 0.0, -1.0e5}, .scale_curve = "load_curve1"}};
+        cases.push_back({.name                       = "TractionUnknownCurve",
+                         .options                    = opts,
+                         .expected_message_substring = "traction references unknown curve",
+                         .expected_context           = {"loads", "tractions", "[0]", "scale_curve"},
+                         .mutate_yaml                = nullptr});
     }
 
     {
         ConfigBuilderOptions opts{};
-        opts.dirichlet_fixes = {
-            DirichletSpec{"FIXED_BASE", {false, false, false}, {std::nullopt, std::nullopt, std::nullopt}}};
-        cases.push_back({"EmptyDirichletDof",
-                         opts,
-                         "dirichlet.dof must not be empty",
-                         {"dirichlet", "fixes", "[0]", "dof"},
-                         nullptr});
+        opts.dirichlet_fixes = {DirichletSpec{.group     = "FIXED_BASE",
+                                              .constrain = {false, false, false},
+                                              .values    = {std::nullopt, std::nullopt, std::nullopt}}};
+        cases.push_back({.name                       = "EmptyDirichletDof",
+                         .options                    = opts,
+                         .expected_message_substring = "dirichlet.dof must not be empty",
+                         .expected_context           = {"dirichlet", "fixes", "[0]", "dof"},
+                         .mutate_yaml                = nullptr});
     }
 
     {
         ConfigBuilderOptions opts{};
         opts.output_stride = 0U;
-        cases.push_back(
-            {"ZeroOutputStride", opts, "output.vtu_stride must be >= 1", {"output", "vtu_stride"}, nullptr});
+        cases.push_back({.name                       = "ZeroOutputStride",
+                         .options                    = opts,
+                         .expected_message_substring = "output.vtu_stride must be >= 1",
+                         .expected_context           = {"output", "vtu_stride"},
+                         .mutate_yaml                = nullptr});
     }
 
     {
         ConfigBuilderOptions opts{};
         opts.include_output = false;
-        cases.push_back({"MissingOutputSection", opts, "missing output map", {"output"}, nullptr});
+        cases.push_back({.name                       = "MissingOutputSection",
+                         .options                    = opts,
+                         .expected_message_substring = "missing output map",
+                         .expected_context           = {"output"},
+                         .mutate_yaml                = nullptr});
     }
 
     {
         ConfigBuilderOptions opts{};
         opts.dirichlet_fixes = {DirichletSpec{}};
-        cases.push_back({"DirichletInvalidAxis",
-                         opts,
-                         "dirichlet.dof must be subset of {x,y,z}",
-                         {"dirichlet", "fixes", "[0]", "dof"},
-                         [](std::string &yaml) {
+        cases.push_back({.name                       = "DirichletInvalidAxis",
+                         .options                    = opts,
+                         .expected_message_substring = "dirichlet.dof must be subset of {x,y,z}",
+                         .expected_context           = {"dirichlet", "fixes", "[0]", "dof"},
+                         .mutate_yaml                = [](std::string &yaml) -> void {
                              const auto token = std::string{"dof: [x, y, z]"};
                              const auto pos   = yaml.find(token);
                              if (pos != std::string::npos)
@@ -291,6 +337,6 @@ auto make_invalid_cases() -> std::vector<InvalidConfigCase>
 
 INSTANTIATE_TEST_SUITE_P(ExhaustiveInvalidConfigs, ConfigInvalidTest,
                          ::testing::ValuesIn(make_invalid_cases()),
-                         [](const ::testing::TestParamInfo<InvalidConfigCase> &test_info) {
+                         [](const ::testing::TestParamInfo<InvalidConfigCase> &test_info) -> std::string {
                              return test_info.param.name;
                          });

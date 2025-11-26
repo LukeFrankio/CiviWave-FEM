@@ -42,18 +42,21 @@ namespace
 {
     if ((alignment == 0U) || !std::has_single_bit(alignment))
     {
-        return std::unexpected(ShardError{"alignment must be a non-zero power of two",
-                                          {"alignment=" + std::to_string(alignment)}});
+        return std::unexpected(ShardError{.message = "alignment must be a non-zero power of two",
+                                          .context = {"alignment=" + std::to_string(alignment)}});
     }
 
     if (max_buffer_bytes == 0U)
     {
-        return std::unexpected(ShardError{"max buffer bytes must be positive", {}});
+        return std::unexpected(ShardError{.message = "max buffer bytes must be positive", .context = {}});
     }
 
     if (specs.empty())
     {
-        return ShardedLayout{{}, {}, max_buffer_bytes, alignment};
+        return ShardedLayout{.segments            = {},
+                            .device_buffer_sizes = {},
+                            .max_buffer_bytes    = max_buffer_bytes,
+                            .alignment           = alignment};
     }
 
     ShardedLayout layout{};
@@ -69,14 +72,14 @@ namespace
     {
         if (spec.size_bytes == 0U)
         {
-            return std::unexpected(ShardError{"buffer has zero size", {"name=" + spec.name}});
+            return std::unexpected(ShardError{.message = "buffer has zero size", .context = {"name=" + spec.name}});
         }
 
         if ((spec.alignment == 0U) || !std::has_single_bit(spec.alignment))
         {
             return std::unexpected(
-                ShardError{"buffer alignment must be power of two",
-                           {"name=" + spec.name, "alignment=" + std::to_string(spec.alignment)}});
+                ShardError{.message = "buffer alignment must be power of two",
+                           .context = {"name=" + spec.name, "alignment=" + std::to_string(spec.alignment)}});
         }
 
         const auto effective_alignment = std::max(alignment, spec.alignment);
@@ -111,13 +114,11 @@ namespace
 
             const auto slice_size = std::min(space_remaining, remaining);
 
-            layout.segments.push_back({
-                spec.name,
-                current_buffer_index,
-                aligned_offset,
-                logical_offset,
-                slice_size,
-            });
+            layout.segments.push_back({.name                = spec.name,
+                                        .device_buffer_index = current_buffer_index,
+                                        .device_offset       = aligned_offset,
+                                        .source_offset       = logical_offset,
+                                        .size_bytes          = slice_size});
 
             aligned_offset += slice_size;
             layout.device_buffer_sizes.at(current_buffer_index) = aligned_offset;

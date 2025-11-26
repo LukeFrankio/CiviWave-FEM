@@ -35,7 +35,7 @@ template <typename ErrorPayload>
 OutputManager::OutputManager(std::filesystem::path root, const mesh::Mesh &mesh,
                              mesh::pack::PackingResult                             &packing,
                              std::span<const physics::materials::ElasticProperties> materials,
-                             config::OutputSettings                                 settings)
+                             const config::OutputSettings                          &settings)
     : root_{std::move(root)}, mesh_{&mesh}, packing_{&packing}, materials_{materials}, settings_{settings},
       probe_logger_{root_ / "probes" / "probes.csv", settings.probes}
 {}

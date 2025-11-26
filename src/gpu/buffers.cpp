@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <ranges>
 #include <span>
 
 namespace cwf::gpu::buffers
@@ -49,17 +50,16 @@ auto build_logical_buffers(const mesh::pack::PackingResult                      
     for (std::size_t mat = 0; mat < materials.size(); ++mat)
     {
         const auto &src = materials[mat].stiffness;
-        auto       *dst = prepared.material_stiffness_fp32.data() + mat * 36U;
+        auto dst_span   = std::span(prepared.material_stiffness_fp32).subspan(mat * 36U, 36U);
         for (std::size_t i = 0; i < 36U; ++i)
         {
-            dst[i] = static_cast<float>(src[i]);
+            dst_span[i] = static_cast<float>(src[i]);
         }
     }
 
     prepared.adjacency_local_indices.resize(packing.buffers.adjacency.local_indices.size());
-    std::transform(packing.buffers.adjacency.local_indices.begin(),
-                   packing.buffers.adjacency.local_indices.end(), prepared.adjacency_local_indices.begin(),
-                   [](std::uint8_t value) { return static_cast<std::uint32_t>(value); });
+    std::ranges::transform(packing.buffers.adjacency.local_indices, prepared.adjacency_local_indices.begin(),
+                           [](std::uint8_t value) -> std::uint32_t { return static_cast<std::uint32_t>(value); });
 
     std::vector<LogicalBuffer> buffers{};
     buffers.reserve(16U);
@@ -92,7 +92,7 @@ auto build_logical_buffers(const mesh::pack::PackingResult                      
                   effective_alignment);
     append_buffer(buffers, "solver.vector.r", as_bytes(make_span(packing.buffers.solver.r)),
                   effective_alignment);
-    append_buffer(buffers, "solver.vector.Ap", as_bytes(make_span(packing.buffers.solver.Ap)),
+    append_buffer(buffers, "solver.vector.ap", as_bytes(make_span(packing.buffers.solver.ap)),
                   effective_alignment);
     append_buffer(buffers, "solver.vector.z", as_bytes(make_span(packing.buffers.solver.z)),
                   effective_alignment);

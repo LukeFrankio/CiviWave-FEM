@@ -61,9 +61,9 @@ struct StagingConfig
  */
 struct UploadChunk
 {
-    std::uint32_t              device_buffer_index;
-    std::size_t                destination_offset;
-    std::span<const std::byte> bytes;
+    std::uint32_t              device_buffer_index{0U};
+    std::size_t                destination_offset{0U};
+    std::span<const std::byte> bytes{};
 };
 
 /**

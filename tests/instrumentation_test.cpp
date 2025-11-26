@@ -44,18 +44,18 @@ class InstrumentationTest : public ::testing::Test
     void SetUp() override
     {
         // Clean up any leftover test files
-        test_output_dir_ = std::filesystem::temp_directory_path() / "cwf_instrumentation_test";
-        std::filesystem::create_directories(test_output_dir_);
+        test_output_dir = std::filesystem::temp_directory_path() / "cwf_instrumentation_test";
+        std::filesystem::create_directories(test_output_dir);
     }
 
     void TearDown() override
     {
         // Remove test output directory
         std::error_code ec;
-        std::filesystem::remove_all(test_output_dir_, ec);
+        std::filesystem::remove_all(test_output_dir, ec);
     }
 
-    std::filesystem::path test_output_dir_;
+    std::filesystem::path test_output_dir;
 };
 
 // -----------------------------------------------------------------------------
@@ -172,14 +172,14 @@ TEST_F(InstrumentationTest, WriteFrameLog_ValidPath_CreatesFile)
     log.solver_tolerance  = 1.0e-4;
     log.wall_clock_ms     = 16.0;
 
-    const auto path   = test_output_dir_ / "test_frame.yaml";
+    const auto path   = test_output_dir / "test_frame.yaml";
     auto       result = write_frame_log(log, path);
 
     ASSERT_TRUE(result.has_value()) << "write_frame_log failed: " << result.error().message;
     EXPECT_TRUE(std::filesystem::exists(path));
 
     // Verify file contents are valid YAML
-    std::ifstream     file{path};
+    std::ifstream const file{path};
     std::stringstream buffer;
     buffer << file.rdbuf();
 
@@ -293,7 +293,7 @@ TEST_F(InstrumentationTest, FrameLogger_WithYamlOutput_WritesFile)
 {
     InstrumentationConfig config{};
     config.enable_yaml_logging = true;
-    config.log_directory       = test_output_dir_;
+    config.log_directory       = test_output_dir;
     config.log_prefix          = "test_";
     config.log_stride          = 1U;
 
@@ -303,7 +303,7 @@ TEST_F(InstrumentationTest, FrameLogger_WithYamlOutput_WritesFile)
 
     auto log = logger.end_frame();
 
-    const auto expected_path = test_output_dir_ / "test_000000.yaml";
+    const auto expected_path = test_output_dir / "test_000000.yaml";
     EXPECT_TRUE(std::filesystem::exists(expected_path)) << "Expected: " << expected_path;
 }
 
@@ -311,7 +311,7 @@ TEST_F(InstrumentationTest, FrameLogger_LogStride_SkipsFrames)
 {
     InstrumentationConfig config{};
     config.enable_yaml_logging = true;
-    config.log_directory       = test_output_dir_;
+    config.log_directory       = test_output_dir;
     config.log_prefix          = "stride_";
     config.log_stride          = 5U; // Only log every 5th frame
 
@@ -319,19 +319,19 @@ TEST_F(InstrumentationTest, FrameLogger_LogStride_SkipsFrames)
 
     // Frame 0 - should be logged (0 % 5 == 0)
     logger.begin_frame(0U, 0.0, 0.01, 1.0e-4, false);
-    logger.end_frame();
+    static_cast<void>(logger.end_frame());
 
     // Frame 1 - should NOT be logged
     logger.begin_frame(1U, 0.01, 0.01, 1.0e-4, false);
-    logger.end_frame();
+    static_cast<void>(logger.end_frame());
 
     // Frame 5 - should be logged (5 % 5 == 0)
     logger.begin_frame(5U, 0.05, 0.01, 1.0e-4, false);
-    logger.end_frame();
+    static_cast<void>(logger.end_frame());
 
-    EXPECT_TRUE(std::filesystem::exists(test_output_dir_ / "stride_000000.yaml"));
-    EXPECT_FALSE(std::filesystem::exists(test_output_dir_ / "stride_000001.yaml"));
-    EXPECT_TRUE(std::filesystem::exists(test_output_dir_ / "stride_000005.yaml"));
+    EXPECT_TRUE(std::filesystem::exists(test_output_dir / "stride_000000.yaml"));
+    EXPECT_FALSE(std::filesystem::exists(test_output_dir / "stride_000001.yaml"));
+    EXPECT_TRUE(std::filesystem::exists(test_output_dir / "stride_000005.yaml"));
 }
 
 // -----------------------------------------------------------------------------
@@ -340,7 +340,7 @@ TEST_F(InstrumentationTest, FrameLogger_LogStride_SkipsFrames)
 
 TEST_F(InstrumentationTest, PassTiming_DefaultConstruction_ZeroValues)
 {
-    PassTiming timing{};
+    PassTiming const timing{};
     EXPECT_TRUE(timing.name.empty());
     EXPECT_DOUBLE_EQ(timing.duration_ms, 0.0);
     EXPECT_EQ(timing.start_tick, 0U);
@@ -349,7 +349,7 @@ TEST_F(InstrumentationTest, PassTiming_DefaultConstruction_ZeroValues)
 
 TEST_F(InstrumentationTest, PassTiming_DesignatedInit_SetsAllFields)
 {
-    PassTiming timing{
+    PassTiming const timing{
         .name        = "test_pass",
         .duration_ms = 42.5,
         .start_tick  = 1000U,
@@ -368,7 +368,7 @@ TEST_F(InstrumentationTest, PassTiming_DesignatedInit_SetsAllFields)
 
 TEST_F(InstrumentationTest, InstrumentationConfig_Defaults_ReasonableValues)
 {
-    InstrumentationConfig config{};
+    InstrumentationConfig const config{};
 
     EXPECT_TRUE(config.enable_gpu_timestamps);
     EXPECT_TRUE(config.enable_yaml_logging);

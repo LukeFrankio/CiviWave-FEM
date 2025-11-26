@@ -47,9 +47,9 @@ namespace
 {
     if ((staging.chunk_bytes == 0U) || (staging.alignment == 0U) || !std::has_single_bit(staging.alignment))
     {
-        return std::unexpected(UploadError{"invalid staging configuration",
-                                           {"chunk_bytes=" + std::to_string(staging.chunk_bytes),
-                                            "alignment=" + std::to_string(staging.alignment)}});
+        return std::unexpected(UploadError{.message = "invalid staging configuration",
+                                           .context = {"chunk_bytes=" + std::to_string(staging.chunk_bytes),
+                                                       "alignment=" + std::to_string(staging.alignment)}});
     }
 
     UploadSchedule schedule{};
@@ -75,17 +75,18 @@ namespace
         const auto found = lookup.find(segment.name);
         if (found == lookup.end())
         {
-            return std::unexpected(UploadError{"missing buffer for segment", {"segment=" + segment.name}});
+            return std::unexpected(UploadError{.message = "missing buffer for segment",
+                                               .context = {"segment=" + segment.name}});
         }
 
         const auto &buffer_span = found->second;
         if (segment.source_offset + segment.size_bytes > buffer_span.size())
         {
-            return std::unexpected(UploadError{"segment exceeds buffer size",
-                                               {"segment=" + segment.name,
-                                                "source_offset=" + std::to_string(segment.source_offset),
-                                                "segment_size=" + std::to_string(segment.size_bytes),
-                                                "buffer_size=" + std::to_string(buffer_span.size())}});
+            return std::unexpected(UploadError{.message = "segment exceeds buffer size",
+                                               .context = {"segment=" + segment.name,
+                                                           "source_offset=" + std::to_string(segment.source_offset),
+                                                           "segment_size=" + std::to_string(segment.size_bytes),
+                                                           "buffer_size=" + std::to_string(buffer_span.size())}});
         }
 
         const auto  data_begin = buffer_span.subspan(segment.source_offset, segment.size_bytes);
@@ -99,11 +100,9 @@ namespace
 
             const auto chunk_span = data_begin.subspan(consumed, chunk_size);
 
-            schedule.commands.push_back({
-                segment.device_buffer_index,
-                segment.device_offset + consumed,
-                chunk_span,
-            });
+            schedule.commands.push_back(UploadChunk{.device_buffer_index = segment.device_buffer_index,
+                                                    .destination_offset = segment.device_offset + consumed,
+                                                    .bytes = chunk_span});
 
             consumed += chunk_size;
             schedule.total_bytes += chunk_size;

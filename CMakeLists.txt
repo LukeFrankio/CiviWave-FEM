@@ -116,7 +116,7 @@ FetchContent_MakeAvailable(vma_src)
 if(NOT TARGET VulkanMemoryAllocator)
     add_library(VulkanMemoryAllocator INTERFACE)
     if(DEFINED vma_src_SOURCE_DIR)
-        target_include_directories(VulkanMemoryAllocator INTERFACE "${vma_src_SOURCE_DIR}/include")
+        target_include_directories(VulkanMemoryAllocator SYSTEM INTERFACE "${vma_src_SOURCE_DIR}/include")
     endif()
 else()
     message(STATUS "VulkanMemoryAllocator target provided by subproject; skipping local interface creation")
@@ -170,7 +170,7 @@ if(ENABLE_TRACY)
         add_library(tracy_client STATIC
             "${tracy_src_SOURCE_DIR}/public/TracyClient.cpp"
         )
-        target_include_directories(tracy_client PUBLIC
+        target_include_directories(tracy_client SYSTEM PUBLIC
             "${tracy_src_SOURCE_DIR}/public"
         )
         target_compile_definitions(tracy_client PUBLIC
@@ -211,7 +211,7 @@ if(BUILD_UI)
             ${imgui_src_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
             ${imgui_src_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp
         )
-        target_include_directories(imgui PUBLIC "${imgui_src_SOURCE_DIR}" "${imgui_src_SOURCE_DIR}/backends" ${Vulkan_INCLUDE_DIRS})
+        target_include_directories(imgui SYSTEM PUBLIC "${imgui_src_SOURCE_DIR}" "${imgui_src_SOURCE_DIR}/backends" ${Vulkan_INCLUDE_DIRS})
         target_link_libraries(imgui PUBLIC glfw Vulkan::Vulkan)
     endif()
 endif()

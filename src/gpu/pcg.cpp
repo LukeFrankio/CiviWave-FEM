@@ -216,9 +216,9 @@ namespace
 
 [[nodiscard]] auto invert_spd_3x3(std::array<double, 9> matrix) -> std::array<double, 9>
 {
-    constexpr double kDetTol = 1.0e-12;
+    constexpr double k_det_tol = 1.0e-12;
 
-    auto determinant = [&]() {
+    auto determinant = [&]() -> double {
         const double a = matrix[0];
         const double b = matrix[1];
         const double c = matrix[2];
@@ -231,7 +231,7 @@ namespace
         return a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
     };
 
-    auto add_regularization = [&]() {
+    auto add_regularization = [&]() -> void {
         const double max_diag = std::max({matrix[0], matrix[4], matrix[8]});
         const double epsilon  = std::max(1.0e-6, max_diag * 1.0e-6 + 1.0e-12);
         matrix[0] += epsilon;
@@ -240,13 +240,13 @@ namespace
     };
 
     double det = determinant();
-    if (std::abs(det) < kDetTol)
+    if (std::abs(det) < k_det_tol)
     {
         add_regularization();
         det = determinant();
     }
 
-    if (std::abs(det) < kDetTol)
+    if (std::abs(det) < k_det_tol)
     {
         std::array<double, 9> inverse{};
         inverse[0] = 1.0 / std::max(matrix[0], 1.0e-6);
@@ -273,11 +273,11 @@ namespace
     -> std::expected<void, PcgError>
 {
     auto buffer = block_buffer_view(workspace, system);
-    std::fill(buffer.begin(), buffer.end(), 0.0);
+    std::ranges::fill(buffer, 0.0);
 
-    constexpr std::size_t kLocalNodes = 4U;
-    constexpr std::size_t kLocalDofs  = 12U;
-    constexpr std::size_t kStrain     = 6U;
+    constexpr std::size_t k_local_nodes = 4U;
+    constexpr std::size_t k_local_dofs  = 12U;
+    constexpr std::size_t k_strain      = 6U;
 
     for (std::size_t element = 0; element < system.element_count; ++element)
     {
@@ -291,55 +291,55 @@ namespace
                 {"element=" + std::to_string(element), "material_index=" + std::to_string(material_index)}));
         }
 
-        std::array<double, kStrain * kLocalDofs> B{};
-        for (std::size_t local = 0; local < kLocalNodes; ++local)
+        std::array<double, k_strain * k_local_dofs> b{};
+        for (std::size_t local = 0; local < k_local_nodes; ++local)
         {
             const auto   grad_index       = gradient_base + local * 3U;
-            const double gx               = static_cast<double>(system.element_gradients[grad_index + 0U]);
-            const double gy               = static_cast<double>(system.element_gradients[grad_index + 1U]);
-            const double gz               = static_cast<double>(system.element_gradients[grad_index + 2U]);
+            const auto   gx                 = static_cast<double>(system.element_gradients[grad_index + 0U]);
+            const auto   gy                 = static_cast<double>(system.element_gradients[grad_index + 1U]);
+            const auto   gz                 = static_cast<double>(system.element_gradients[grad_index + 2U]);
             const auto   col              = local * 3U;
-            B[0U * kLocalDofs + col + 0U] = gx;
-            B[1U * kLocalDofs + col + 1U] = gy;
-            B[2U * kLocalDofs + col + 2U] = gz;
-            B[3U * kLocalDofs + col + 0U] = gy;
-            B[3U * kLocalDofs + col + 1U] = gx;
-            B[4U * kLocalDofs + col + 1U] = gz;
-            B[4U * kLocalDofs + col + 2U] = gy;
-            B[5U * kLocalDofs + col + 0U] = gz;
-            B[5U * kLocalDofs + col + 2U] = gx;
+            b[0U * k_local_dofs + col + 0U] = gx;
+            b[1U * k_local_dofs + col + 1U] = gy;
+            b[2U * k_local_dofs + col + 2U] = gz;
+            b[3U * k_local_dofs + col + 0U] = gy;
+            b[3U * k_local_dofs + col + 1U] = gx;
+            b[4U * k_local_dofs + col + 1U] = gz;
+            b[4U * k_local_dofs + col + 2U] = gy;
+            b[5U * k_local_dofs + col + 0U] = gz;
+            b[5U * k_local_dofs + col + 2U] = gx;
         }
 
-        std::array<double, kStrain * kLocalDofs> DB{};
+        std::array<double, k_strain * k_local_dofs> db{};
         const auto                              &stiffness = system.materials[material_index].stiffness;
-        for (std::size_t row = 0; row < kStrain; ++row)
+        for (std::size_t row = 0; row < k_strain; ++row)
         {
-            for (std::size_t col = 0; col < kLocalDofs; ++col)
+            for (std::size_t col = 0; col < k_local_dofs; ++col)
             {
                 double sum = 0.0;
-                for (std::size_t mid = 0; mid < kStrain; ++mid)
+                for (std::size_t mid = 0; mid < k_strain; ++mid)
                 {
-                    sum += stiffness[row * kStrain + mid] * B[mid * kLocalDofs + col];
+                    sum += stiffness[row * k_strain + mid] * b[mid * k_local_dofs + col];
                 }
-                DB[row * kLocalDofs + col] = sum;
+                db[row * k_local_dofs + col] = sum;
             }
         }
 
-        std::array<double, kLocalDofs * kLocalDofs> ke{};
-        for (std::size_t i = 0; i < kLocalDofs; ++i)
+        std::array<double, k_local_dofs * k_local_dofs> ke{};
+        for (std::size_t i = 0; i < k_local_dofs; ++i)
         {
-            for (std::size_t j = 0; j < kLocalDofs; ++j)
+            for (std::size_t j = 0; j < k_local_dofs; ++j)
             {
                 double sum = 0.0;
-                for (std::size_t row = 0; row < kStrain; ++row)
+                for (std::size_t row = 0; row < k_strain; ++row)
                 {
-                    sum += B[row * kLocalDofs + i] * DB[row * kLocalDofs + j];
+                    sum += b[row * k_local_dofs + i] * db[row * k_local_dofs + j];
                 }
-                ke[i * kLocalDofs + j] = sum;
+                ke[i * k_local_dofs + j] = sum;
             }
         }
 
-        const double volume        = static_cast<double>(system.element_volume[element]);
+        const auto   volume        = static_cast<double>(system.element_volume[element]);
         const double scaled_volume = volume * system.stiffness_scale;
 
         for (double &value : ke)
@@ -347,7 +347,7 @@ namespace
             value *= scaled_volume;
         }
 
-        for (std::size_t local = 0; local < kLocalNodes; ++local)
+        for (std::size_t local = 0; local < k_local_nodes; ++local)
         {
             const auto node_index = system.element_connectivity[connectivity_base + local];
             if (node_index >= system.node_count)
@@ -363,7 +363,7 @@ namespace
                 for (std::size_t axis_j = 0; axis_j < 3U; ++axis_j)
                 {
                     const auto local_j = local * 3U + axis_j;
-                    buffer[block_base + axis_i * 3U + axis_j] += ke[local_i * kLocalDofs + local_j];
+                    buffer[block_base + axis_i * 3U + axis_j] += ke[local_i * k_local_dofs + local_j];
                 }
             }
         }
@@ -546,18 +546,18 @@ auto build_block_jacobi_inverse(const MatrixFreeSystem &system, MatrixFreeWorksp
         }
     }
 
-    std::fill(accumulation.begin(), accumulation.end(), 0.0);
+    std::ranges::fill(accumulation, 0.0);
 
-    constexpr std::size_t kLocalNodes = 4U;
-    constexpr std::size_t kLocalDofs  = 12U;
-    constexpr std::size_t kStrain     = 6U;
+    constexpr std::size_t k_local_nodes = 4U;
+    constexpr std::size_t k_local_dofs  = 12U;
+    constexpr std::size_t k_strain      = 6U;
 
-    std::array<double, kStrain * kLocalDofs> B{};
-    std::array<double, kStrain * kLocalDofs> DB{};
-    std::array<double, kLocalDofs>           local_u{};
-    std::array<double, kStrain>              strain{};
-    std::array<double, kStrain>              stress{};
-    std::array<double, kLocalDofs>           local_force{};
+    std::array<double, k_strain * k_local_dofs> b{};
+    std::array<double, k_strain * k_local_dofs> db{};
+    std::array<double, k_local_dofs>            local_u{};
+    std::array<double, k_strain>                strain{};
+    std::array<double, k_strain>                stress{};
+    std::array<double, k_local_dofs>            local_force{};
 
     for (std::size_t element = 0; element < system.element_count; ++element)
     {
@@ -571,40 +571,40 @@ auto build_block_jacobi_inverse(const MatrixFreeSystem &system, MatrixFreeWorksp
                 {"element=" + std::to_string(element), "material_index=" + std::to_string(material_index)}));
         }
 
-        B.fill(0.0);
-        for (std::size_t local = 0; local < kLocalNodes; ++local)
+        b.fill(0.0);
+        for (std::size_t local = 0; local < k_local_nodes; ++local)
         {
             const auto   grad_index       = gradient_base + local * 3U;
-            const double gx               = static_cast<double>(system.element_gradients[grad_index + 0U]);
-            const double gy               = static_cast<double>(system.element_gradients[grad_index + 1U]);
-            const double gz               = static_cast<double>(system.element_gradients[grad_index + 2U]);
+            const auto   gx                 = static_cast<double>(system.element_gradients[grad_index + 0U]);
+            const auto   gy                 = static_cast<double>(system.element_gradients[grad_index + 1U]);
+            const auto   gz                 = static_cast<double>(system.element_gradients[grad_index + 2U]);
             const auto   col              = local * 3U;
-            B[0U * kLocalDofs + col + 0U] = gx;
-            B[1U * kLocalDofs + col + 1U] = gy;
-            B[2U * kLocalDofs + col + 2U] = gz;
-            B[3U * kLocalDofs + col + 0U] = gy;
-            B[3U * kLocalDofs + col + 1U] = gx;
-            B[4U * kLocalDofs + col + 1U] = gz;
-            B[4U * kLocalDofs + col + 2U] = gy;
-            B[5U * kLocalDofs + col + 0U] = gz;
-            B[5U * kLocalDofs + col + 2U] = gx;
+            b[0U * k_local_dofs + col + 0U] = gx;
+            b[1U * k_local_dofs + col + 1U] = gy;
+            b[2U * k_local_dofs + col + 2U] = gz;
+            b[3U * k_local_dofs + col + 0U] = gy;
+            b[3U * k_local_dofs + col + 1U] = gx;
+            b[4U * k_local_dofs + col + 1U] = gz;
+            b[4U * k_local_dofs + col + 2U] = gy;
+            b[5U * k_local_dofs + col + 0U] = gz;
+            b[5U * k_local_dofs + col + 2U] = gx;
         }
 
         const auto &stiffness = system.materials[material_index].stiffness;
-        for (std::size_t row = 0; row < kStrain; ++row)
+        for (std::size_t row = 0; row < k_strain; ++row)
         {
-            for (std::size_t col = 0; col < kLocalDofs; ++col)
+            for (std::size_t col = 0; col < k_local_dofs; ++col)
             {
                 double sum = 0.0;
-                for (std::size_t mid = 0; mid < kStrain; ++mid)
+                for (std::size_t mid = 0; mid < k_strain; ++mid)
                 {
-                    sum += stiffness[row * kStrain + mid] * B[mid * kLocalDofs + col];
+                    sum += stiffness[row * k_strain + mid] * b[mid * k_local_dofs + col];
                 }
-                DB[row * kLocalDofs + col] = sum;
+                db[row * k_local_dofs + col] = sum;
             }
         }
 
-        for (std::size_t local = 0; local < kLocalNodes; ++local)
+        for (std::size_t local = 0; local < k_local_nodes; ++local)
         {
             const auto node_index = system.element_connectivity[connectivity_base + local];
             if (node_index >= system.node_count)
@@ -620,38 +620,38 @@ auto build_block_jacobi_inverse(const MatrixFreeSystem &system, MatrixFreeWorksp
             }
         }
 
-        for (std::size_t row = 0; row < kStrain; ++row)
+        for (std::size_t row = 0; row < k_strain; ++row)
         {
             double sum = 0.0;
-            for (std::size_t col = 0; col < kLocalDofs; ++col)
+            for (std::size_t col = 0; col < k_local_dofs; ++col)
             {
-                sum += B[row * kLocalDofs + col] * local_u[col];
+                sum += b[row * k_local_dofs + col] * local_u[col];
             }
             strain[row] = sum;
         }
 
-        for (std::size_t row = 0; row < kStrain; ++row)
+        for (std::size_t row = 0; row < k_strain; ++row)
         {
             double sum = 0.0;
-            for (std::size_t col = 0; col < kStrain; ++col)
+            for (std::size_t col = 0; col < k_strain; ++col)
             {
-                sum += stiffness[row * kStrain + col] * strain[col];
+                sum += stiffness[row * k_strain + col] * strain[col];
             }
             stress[row] = sum;
         }
 
         const double volume = static_cast<double>(system.element_volume[element]) * system.stiffness_scale;
-        for (std::size_t col = 0; col < kLocalDofs; ++col)
+        for (std::size_t col = 0; col < k_local_dofs; ++col)
         {
             double sum = 0.0;
-            for (std::size_t row = 0; row < kStrain; ++row)
+            for (std::size_t row = 0; row < k_strain; ++row)
             {
-                sum += B[row * kLocalDofs + col] * stress[row];
+                sum += b[row * k_local_dofs + col] * stress[row];
             }
             local_force[col] = sum * volume;
         }
 
-        for (std::size_t local = 0; local < kLocalNodes; ++local)
+        for (std::size_t local = 0; local < k_local_nodes; ++local)
         {
             const auto node_index = system.element_connectivity[connectivity_base + local];
             const auto dof_base   = node_index * 3U;
@@ -744,7 +744,7 @@ auto build_block_jacobi_inverse(const MatrixFreeSystem &system, MatrixFreeWorksp
 
     if (!settings.warm_start)
     {
-        std::fill(vectors.solution.begin(), vectors.solution.end(), 0.0F);
+        std::ranges::fill(vectors.solution, 0.0F);
     }
 
     if (auto prepared = prepare_block_jacobi(system, workspace); !prepared)
@@ -815,7 +815,7 @@ auto build_block_jacobi_inverse(const MatrixFreeSystem &system, MatrixFreeWorksp
         return std::unexpected(make_error("preconditioner produced near-zero rho", {"rho~0"}));
     }
 
-    std::copy(vectors.preconditioned.begin(), vectors.preconditioned.end(), vectors.search_direction.begin());
+    std::ranges::copy(vectors.preconditioned, vectors.search_direction.begin());
 
     for (std::size_t node = 0; node < system.node_count; ++node)
     {
@@ -845,7 +845,7 @@ auto build_block_jacobi_inverse(const MatrixFreeSystem &system, MatrixFreeWorksp
         {
             return std::unexpected(denom_value.error());
         }
-        double denom = denom_value.value();
+        double const denom = denom_value.value();
         if (std::abs(denom) < 1.0e-18)
         {
             return std::unexpected(

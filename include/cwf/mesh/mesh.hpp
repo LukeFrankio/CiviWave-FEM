@@ -30,6 +30,7 @@
 #pragma once
 
 #include <array>
+#include <limits>
 #include <expected>
 #include <filesystem>
 #include <string>
@@ -93,10 +94,10 @@ struct Node
  */
 struct Element
 {
-    std::uint32_t                original_id;    ///< id from Gmsh file (1-indexed)
-    ElementGeometry              geometry;       ///< element topology
+    std::uint32_t                original_id{std::numeric_limits<std::uint32_t>::max()};    ///< id from Gmsh file (1-indexed)
+    ElementGeometry              geometry{ElementGeometry::Tetrahedron4};       ///< element topology
     std::array<std::uint32_t, 8> nodes{};        ///< node indices (unused entries set to UINT32_MAX)
-    std::uint32_t                physical_group; ///< group id (links to PhysicalGroup.id)
+    std::uint32_t                physical_group{0U}; ///< group id (links to PhysicalGroup.id)
 };
 
 /**
@@ -104,10 +105,10 @@ struct Element
  */
 struct Surface
 {
-    std::uint32_t                original_id;    ///< id from mesh file for traceability
-    SurfaceGeometry              geometry;       ///< topology (Triangle3/Quadrilateral4)
+    std::uint32_t                original_id{std::numeric_limits<std::uint32_t>::max()};    ///< id from mesh file for traceability
+    SurfaceGeometry              geometry{SurfaceGeometry::Triangle3};       ///< topology (Triangle3/Quadrilateral4)
     std::array<std::uint32_t, 4> nodes{};        ///< node indices (unused slots max)
-    std::uint32_t                physical_group; ///< associated physical group id
+    std::uint32_t                physical_group{0U}; ///< associated physical group id
 };
 
 /**

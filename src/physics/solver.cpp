@@ -39,54 +39,54 @@ namespace
 [[nodiscard]] auto build_element_stiffness(const std::array<common::Vec3, 8> &gradients, double volume,
                                            const std::array<double, 36> &stiffness) -> std::array<double, 144>
 {
-    constexpr std::size_t   kDofs   = 12U;
-    constexpr std::size_t   kStrain = 6U;
-    std::array<double, 72>  B{};
-    std::array<double, 72>  DB{};
-    std::array<double, 144> Ke{};
+    constexpr std::size_t   k_dofs   = 12U;
+    constexpr std::size_t   k_strain = 6U;
+    std::array<double, 72>  b{};
+    std::array<double, 72>  db{};
+    std::array<double, 144> ke{};
 
     for (std::size_t node = 0; node < 4U; ++node)
     {
         const auto       &grad   = gradients[node];
         const std::size_t col    = node * 3U;
-        B[0U * kDofs + col + 0U] = grad[0];
-        B[1U * kDofs + col + 1U] = grad[1];
-        B[2U * kDofs + col + 2U] = grad[2];
-        B[3U * kDofs + col + 0U] = grad[1];
-        B[3U * kDofs + col + 1U] = grad[0];
-        B[4U * kDofs + col + 1U] = grad[2];
-        B[4U * kDofs + col + 2U] = grad[1];
-        B[5U * kDofs + col + 0U] = grad[2];
-        B[5U * kDofs + col + 2U] = grad[0];
+        b[0U * k_dofs + col + 0U] = grad[0];
+        b[1U * k_dofs + col + 1U] = grad[1];
+        b[2U * k_dofs + col + 2U] = grad[2];
+        b[3U * k_dofs + col + 0U] = grad[1];
+        b[3U * k_dofs + col + 1U] = grad[0];
+        b[4U * k_dofs + col + 1U] = grad[2];
+        b[4U * k_dofs + col + 2U] = grad[1];
+        b[5U * k_dofs + col + 0U] = grad[2];
+        b[5U * k_dofs + col + 2U] = grad[0];
     }
 
-    for (std::size_t row = 0; row < kStrain; ++row)
+    for (std::size_t row = 0; row < k_strain; ++row)
     {
-        for (std::size_t col = 0; col < kDofs; ++col)
+        for (std::size_t col = 0; col < k_dofs; ++col)
         {
             double sum = 0.0;
-            for (std::size_t mid = 0; mid < kStrain; ++mid)
+            for (std::size_t mid = 0; mid < k_strain; ++mid)
             {
-                sum += stiffness[row * kStrain + mid] * B[mid * kDofs + col];
+                sum += stiffness[row * k_strain + mid] * b[mid * k_dofs + col];
             }
-            DB[row * kDofs + col] = sum;
+            db[row * k_dofs + col] = sum;
         }
     }
 
-    for (std::size_t i = 0; i < kDofs; ++i)
+    for (std::size_t i = 0; i < k_dofs; ++i)
     {
-        for (std::size_t j = 0; j < kDofs; ++j)
+        for (std::size_t j = 0; j < k_dofs; ++j)
         {
             double sum = 0.0;
-            for (std::size_t row = 0; row < kStrain; ++row)
+            for (std::size_t row = 0; row < k_strain; ++row)
             {
-                sum += B[row * kDofs + i] * DB[row * kDofs + j];
+                sum += b[row * k_dofs + i] * db[row * k_dofs + j];
             }
-            Ke[i * kDofs + j] = sum * volume;
+            ke[i * k_dofs + j] = sum * volume;
         }
     }
 
-    return Ke;
+    return ke;
 }
 
 [[nodiscard]] auto gather_group_nodes(const mesh::Mesh &mesh, std::uint32_t group_id)
@@ -207,7 +207,7 @@ struct CgResult
         stats.converged     = true;
         stats.residual_norm = residual_norm;
         stats.iterations    = 0U;
-        return CgResult{std::move(x), stats};
+        return CgResult{.solution = std::move(x), .stats = stats};
     }
 
     // Compute relative tolerance threshold
@@ -219,13 +219,13 @@ struct CgResult
         stats.converged     = true;
         stats.residual_norm = residual_norm / initial_residual;
         stats.iterations    = 0U;
-        return CgResult{std::move(x), stats};
+        return CgResult{.solution = std::move(x), .stats = stats};
     }
 
     for (std::size_t iter = 0; iter < max_iterations; ++iter)
     {
-        const auto   Ap    = apply_matrix(matrix, p);
-        const double denom = dot(p, Ap);
+        const auto   applied    = apply_matrix(matrix, p);
+        const double denom = dot(p, applied);
 
         // Check for breakdown (search direction orthogonal to A*p)
         if (std::abs(denom) < std::numeric_limits<double>::epsilon())
@@ -237,7 +237,7 @@ struct CgResult
         for (std::size_t i = 0; i < n; ++i)
         {
             x[i] += alpha * p[i];
-            r[i] -= alpha * Ap[i];
+            r[i] -= alpha * applied[i];
         }
 
         residual_norm    = std::sqrt(dot(r, r));
@@ -248,7 +248,7 @@ struct CgResult
         {
             stats.converged     = true;
             stats.residual_norm = residual_norm / initial_residual;
-            return CgResult{std::move(x), stats};
+            return CgResult{.solution = std::move(x), .stats = stats};
         }
 
         // Update preconditioned residual
@@ -269,7 +269,7 @@ struct CgResult
 
     stats.converged     = false;
     stats.residual_norm = residual_norm / initial_residual;
-    return CgResult{std::move(x), stats};
+    return CgResult{.solution = std::move(x), .stats = stats};
 }
 
 [[nodiscard]] auto assemble_lumped_mass(const mesh::pre::Outputs &preprocess, std::size_t dofs)
@@ -470,7 +470,7 @@ auto solve_newmark_step(const Assembly &assembly, const materials::RayleighCoeff
         }
     }
 
-    return StepResult{std::move(next_state), cg.stats};
+    return StepResult{.state = std::move(next_state), .stats = cg.stats};
 }
 
 } // namespace cwf::physics::solver

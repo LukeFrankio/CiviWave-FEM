@@ -99,7 +99,7 @@ struct MatrixFreeWorkspace
 };
 
 /**
- * @brief spans into solver scratch buffers allocated by mesh::pack (p, r, Ap, z, x, partials)
+ * @brief spans into solver scratch buffers allocated by mesh::pack (p, r, ap, z, x, partials)
  */
 struct PcgVectors
 {
@@ -107,7 +107,7 @@ struct PcgVectors
     std::span<float>  residual;         ///< r_k
     std::span<float>  search_direction; ///< p_k
     std::span<float>  preconditioned;   ///< z_k = M^{-1} r_k
-    std::span<float>  matvec;           ///< Ap_k
+    std::span<float>  matvec;           ///< ap_k
     std::span<double> partials; ///< FP64 reduction workspace (length == MatrixFreeSystem::reduction_partials)
 };
 
@@ -182,7 +182,7 @@ struct PcgTelemetry
  * @param[in] system matrix-free metadata (same as @ref apply_keff)
  * @param[in] rhs right-hand side vector (FP32, already Dirichlet-conditioned like CPU solver)
  * @param[in] settings solver limits + tolerance + warm-start toggle
- * @param[in,out] vectors solver scratch spans from packed buffers (p, r, Ap, z, x, partials)
+ * @param[in,out] vectors solver scratch spans from packed buffers (p, r, ap, z, x, partials)
  * @param[in,out] workspace reusable matrix-free + block-jacobi buffers
  * @return std::expected<PcgTelemetry, PcgError> telemetry on success, or diagnostic payload on failure
  *
@@ -202,7 +202,7 @@ struct PcgTelemetry
  *     .residual = solver_buffers.r,
  *     .search_direction = solver_buffers.p,
  *     .preconditioned = solver_buffers.z,
- *     .matvec = solver_buffers.Ap,
+ *     .matvec = solver_buffers.ap,
  *     .partials = solver_partials
  * };
  * PcgSettings settings{.max_iterations = 64, .relative_tolerance = 2.5e-4, .warm_start = false};

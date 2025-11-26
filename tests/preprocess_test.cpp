@@ -82,7 +82,7 @@ TEST(PreprocessPipeline, ProducesExpectedOutputsForCantileverFixture)
 
     const double expected_mass = (2500.0 * (1.0 / 6.0)) / 4.0;
     ASSERT_EQ(outputs.lumped_mass.size(), 4U);
-    for (double mass : outputs.lumped_mass)
+    for (double const mass : outputs.lumped_mass)
     {
         EXPECT_NEAR(mass, expected_mass, kTol);
     }
@@ -110,7 +110,7 @@ TEST(PreprocessPipeline, SupportsHexahedralElements)
     opts.tractions.clear();
     const auto config_result = cwf::test_support::load_config(opts);
     ASSERT_TRUE(config_result.has_value());
-    const auto config     = config_result.value();
+    const auto &config     = config_result.value();
     const auto preprocess = cwf::mesh::pre::run(mesh, config);
     ASSERT_TRUE(preprocess.has_value()) << preprocess.error().message;
 
@@ -132,7 +132,7 @@ TEST(PreprocessPipeline, SupportsHexahedralElements)
     // lumped mass for 8 nodes with density 2500, volume 1.0
     const double expected_mass_per_node = 2500.0 * 1.0 / 8.0;
     ASSERT_EQ(outputs.lumped_mass.size(), 8U);
-    for (double mass : outputs.lumped_mass)
+    for (double const mass : outputs.lumped_mass)
     {
         EXPECT_NEAR(mass, expected_mass_per_node, 1e-6);
     }
@@ -171,7 +171,7 @@ TEST(PreprocessPipeline, RejectsDegenerateTetrahedron)
     opts.tractions.clear();
     const auto config_result = cwf::test_support::load_config(opts);
     ASSERT_TRUE(config_result.has_value());
-    const auto config     = config_result.value();
+    const auto &config     = config_result.value();
     const auto preprocess = cwf::mesh::pre::run(mesh, config);
     ASSERT_FALSE(preprocess.has_value());
     // Note: duplicate node detection runs before volume check, so we get that error first
@@ -220,11 +220,12 @@ TEST(PreprocessPipeline, ValidatesDirichletGroupsExist)
 
     // Create config with dirichlet fix referencing non-existent group
     cwf::test_support::ConfigBuilderOptions options;
-    options.dirichlet_fixes = {
-        {"NONEXISTENT_GROUP", {true, true, true}, {std::nullopt, std::nullopt, std::nullopt}}};
+    options.dirichlet_fixes  = {{.group     = "NONEXISTENT_GROUP",
+                                 .constrain = {true, true, true},
+                                 .values    = {std::nullopt, std::nullopt, std::nullopt}}};
     const auto config_result = cwf::test_support::load_config(options);
     ASSERT_TRUE(config_result.has_value());
-    const auto config = config_result.value();
+    const auto &config = config_result.value();
 
     const auto preprocess = cwf::mesh::pre::run(mesh, config);
     ASSERT_FALSE(preprocess.has_value());
@@ -245,10 +246,10 @@ TEST(PreprocessPipeline, ValidatesTractionGroupsExist)
     // ALSO clear default dirichlet groups to avoid validation errors before traction check
     cwf::test_support::ConfigBuilderOptions options;
     options.dirichlet_fixes.clear(); // Remove default FIXED_BASE group
-    options.tractions        = {{"NONEXISTENT_GROUP", {1.0, 0.0, 0.0}, ""}};
+    options.tractions        = {{.group = "NONEXISTENT_GROUP", .value = {1.0, 0.0, 0.0}, .scale_curve = ""}};
     const auto config_result = cwf::test_support::load_config(options);
     ASSERT_TRUE(config_result.has_value());
-    const auto config = config_result.value();
+    const auto &config = config_result.value();
 
     const auto preprocess = cwf::mesh::pre::run(mesh, config);
     ASSERT_FALSE(preprocess.has_value());
@@ -268,13 +269,16 @@ TEST(PreprocessPipeline, LoadsBlockValidationMesh)
 
     // Create config matching block_validation.yaml
     cwf::test_support::ConfigBuilderOptions opts;
-    opts.assignments     = {{"BLOCK", "concrete"}};
-    opts.materials       = {{"concrete", 3.0e10, 0.2, 2500.0}};
-    opts.dirichlet_fixes = {{"BOTTOM_FIXED", {true, true, true}, {std::nullopt, std::nullopt, std::nullopt}}};
+    opts.assignments = {{.group = "BLOCK", .material = "concrete"}};
+    opts.materials   = {
+        {.name = "concrete", .youngs_modulus = 3.0e10, .poisson_ratio = 0.2, .density = 2500.0}};
+    opts.dirichlet_fixes = {{.group     = "BOTTOM_FIXED",
+                             .constrain = {true, true, true},
+                             .values    = {std::nullopt, std::nullopt, std::nullopt}}};
     opts.tractions.clear();
     const auto config_result = cwf::test_support::load_config(opts);
     ASSERT_TRUE(config_result.has_value()) << "config builder failed";
-    const auto config = config_result.value();
+    const auto &config = config_result.value();
 
     const auto preprocess = cwf::mesh::pre::run(mesh, config);
     ASSERT_TRUE(preprocess.has_value()) << preprocess.error().message;
@@ -284,7 +288,7 @@ TEST(PreprocessPipeline, LoadsBlockValidationMesh)
 
     // total volume should be 1.0 (unit cube)
     double total_vol = 0.0;
-    for (double v : outputs.element_volumes)
+    for (double const v : outputs.element_volumes)
     {
         total_vol += v;
     }
@@ -314,11 +318,17 @@ TEST(PreprocessPipeline, LoadsBeamValidationMeshWithSurfaces)
     for (const auto &group : mesh.physical_groups)
     {
         if (group.name == "FIXED_END")
+        {
             found_fixed = true;
+        }
         if (group.name == "FREE_END")
+        {
             found_free = true;
+        }
         if (group.name == "BEAM")
+        {
             found_beam = true;
+        }
     }
     EXPECT_TRUE(found_fixed) << "FIXED_END physical group not found";
     EXPECT_TRUE(found_free) << "FREE_END physical group not found";
@@ -334,13 +344,15 @@ TEST(PreprocessPipeline, LoadsBeamValidationMeshWithSurfaces)
 
     // Create config matching beam_validation.yaml
     cwf::test_support::ConfigBuilderOptions opts;
-    opts.assignments     = {{"BEAM", "steel"}};
-    opts.materials       = {{"steel", 2.0e11, 0.3, 7850.0}};
-    opts.dirichlet_fixes = {{"FIXED_END", {true, true, true}, {std::nullopt, std::nullopt, std::nullopt}}};
-    opts.tractions       = {{"FREE_END", {0.0, 0.0, -100000.0}, ""}};
+    opts.assignments = {{.group = "BEAM", .material = "steel"}};
+    opts.materials   = {{.name = "steel", .youngs_modulus = 2.0e11, .poisson_ratio = 0.3, .density = 7850.0}};
+    opts.dirichlet_fixes     = {{.group     = "FIXED_END",
+                                 .constrain = {true, true, true},
+                                 .values    = {std::nullopt, std::nullopt, std::nullopt}}};
+    opts.tractions           = {{.group = "FREE_END", .value = {0.0, 0.0, -100000.0}, .scale_curve = ""}};
     const auto config_result = cwf::test_support::load_config(opts);
     ASSERT_TRUE(config_result.has_value()) << "config builder failed";
-    const auto config = config_result.value();
+    const auto &config = config_result.value();
 
     const auto preprocess = cwf::mesh::pre::run(mesh, config);
     ASSERT_TRUE(preprocess.has_value()) << preprocess.error().message;

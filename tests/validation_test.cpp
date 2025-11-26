@@ -148,8 +148,8 @@ namespace
 {
     const double moment = load * length;
     const double c      = height / 2.0;
-    const double I      = (width * height * height * height) / 12.0;
-    return (moment * c) / I;
+    const double i      = (width * height * height * height) / 12.0;
+    return (moment * c) / i;
 }
 
 /**
@@ -183,7 +183,7 @@ class StaticValidationTest : public ::testing::Test
   protected:
     void SetUp() override
     {
-        test_data_dir_ = std::filesystem::path{CWF_TEST_DATA_DIR};
+        test_data_dir = std::filesystem::path{CWF_TEST_DATA_DIR};
     }
 
     /**
@@ -194,39 +194,39 @@ class StaticValidationTest : public ::testing::Test
      */
     [[nodiscard]] auto load_test_case(const std::string &config_name) -> bool
     {
-        const auto config_path = test_data_dir_ / config_name;
+        const auto config_path = test_data_dir / config_name;
 
         auto config_result = cwf::config::load_config_from_file(config_path);
         if (!config_result.has_value())
         {
             return false;
         }
-        config_ = std::move(config_result.value());
+        config = std::move(config_result.value());
 
-        const auto mesh_path   = test_data_dir_ / std::filesystem::path{config_.mesh_path}.filename();
+        const auto mesh_path   = test_data_dir / std::filesystem::path{config.mesh_path}.filename();
         auto       mesh_result = cwf::mesh::load_gmsh_file(mesh_path);
         if (!mesh_result.has_value())
         {
             return false;
         }
-        mesh_ = std::move(mesh_result.value());
+        mesh = std::move(mesh_result.value());
 
-        auto preprocess_result = cwf::mesh::pre::run(mesh_, config_);
+        auto preprocess_result = cwf::mesh::pre::run(mesh, config);
         if (!preprocess_result.has_value())
         {
             return false;
         }
-        preprocess_ = std::move(preprocess_result.value());
+        preprocess = std::move(preprocess_result.value());
 
         // build materials
-        materials_.clear();
-        materials_.reserve(config_.materials.size());
-        for (const auto &mat : config_.materials)
+        materials.clear();
+        materials.reserve(config.materials.size());
+        for (const auto &mat : config.materials)
         {
-            materials_.push_back(cwf::physics::materials::make_properties(mat));
+            materials.push_back(cwf::physics::materials::make_properties(mat));
         }
 
-        rayleigh_ = cwf::physics::materials::compute_rayleigh(config_.damping);
+        rayleigh = cwf::physics::materials::compute_rayleigh(config.damping);
 
         return true;
     }
@@ -241,23 +241,23 @@ class StaticValidationTest : public ::testing::Test
     [[nodiscard]] auto run_static_solver(double time_end, std::size_t max_steps)
         -> std::optional<cwf::physics::newmark::State>
     {
-        const auto assembly  = cwf::physics::solver::assemble_linear_system(mesh_, preprocess_, materials_);
-        const auto dirichlet = cwf::physics::solver::build_dirichlet_conditions(mesh_, config_);
+        const auto assembly  = cwf::physics::solver::assemble_linear_system(mesh, preprocess, materials);
+        const auto dirichlet = cwf::physics::solver::build_dirichlet_conditions(mesh, config);
 
         cwf::physics::newmark::State state{};
-        const std::size_t            dofs = mesh_.nodes.size() * 3U;
+        const std::size_t            dofs = mesh.nodes.size() * 3U;
         state.displacement.assign(dofs, 0.0);
         state.velocity.assign(dofs, 0.0);
         state.acceleration.assign(dofs, 0.0);
 
-        auto   coeffs = cwf::physics::newmark::make_coefficients(config_.time.initial_dt);
+        auto   coeffs = cwf::physics::newmark::make_coefficients(config.time.initial_dt);
         double time   = 0.0;
 
         for (std::size_t step = 0; step < max_steps && time < time_end; ++step)
         {
             auto result = cwf::physics::solver::solve_newmark_step(
-                assembly, rayleigh_, dirichlet, mesh_, config_, preprocess_, coeffs, state, time,
-                config_.solver.runtime_tolerance, config_.solver.max_iterations);
+                assembly, rayleigh, dirichlet, mesh, config, preprocess, coeffs, state, time,
+                config.solver.runtime_tolerance, config.solver.max_iterations);
 
             if (!result.stats.converged)
             {
@@ -265,7 +265,7 @@ class StaticValidationTest : public ::testing::Test
             }
 
             state = std::move(result.state);
-            time += config_.time.initial_dt;
+            time += config.time.initial_dt;
         }
 
         return state;
@@ -280,9 +280,9 @@ class StaticValidationTest : public ::testing::Test
     [[nodiscard]] auto find_node_near(const cwf::common::Vec3 &target_pos, double tolerance = 0.1)
         -> std::optional<std::size_t>
     {
-        for (std::size_t i = 0; i < mesh_.nodes.size(); ++i)
+        for (std::size_t i = 0; i < mesh.nodes.size(); ++i)
         {
-            const auto  &pos  = mesh_.nodes[i].position;
+            const auto  &pos  = mesh.nodes[i].position;
             const double dist = std::sqrt((pos[0] - target_pos[0]) * (pos[0] - target_pos[0]) +
                                           (pos[1] - target_pos[1]) * (pos[1] - target_pos[1]) +
                                           (pos[2] - target_pos[2]) * (pos[2] - target_pos[2]));
@@ -303,7 +303,7 @@ class StaticValidationTest : public ::testing::Test
     [[nodiscard]] auto compute_max_displacement(const cwf::physics::newmark::State &state) const -> double
     {
         double max_mag = 0.0;
-        for (std::size_t node = 0; node < mesh_.nodes.size(); ++node)
+        for (std::size_t node = 0; node < mesh.nodes.size(); ++node)
         {
             const double ux  = state.displacement[node * 3U + 0U];
             const double uy  = state.displacement[node * 3U + 1U];
@@ -323,23 +323,23 @@ class StaticValidationTest : public ::testing::Test
     [[nodiscard]] auto compute_kinetic_energy(const cwf::physics::newmark::State &state) const -> double
     {
         double ke = 0.0;
-        for (std::size_t node = 0; node < mesh_.nodes.size(); ++node)
+        for (std::size_t node = 0; node < mesh.nodes.size(); ++node)
         {
             const double vx   = state.velocity[node * 3U + 0U];
             const double vy   = state.velocity[node * 3U + 1U];
             const double vz   = state.velocity[node * 3U + 2U];
             const double v_sq = vx * vx + vy * vy + vz * vz;
-            ke += 0.5 * preprocess_.lumped_mass[node] * v_sq;
+            ke += 0.5 * preprocess.lumped_mass[node] * v_sq;
         }
         return ke;
     }
 
-    std::filesystem::path                                   test_data_dir_;
-    cwf::config::Config                                     config_{};
-    cwf::mesh::Mesh                                         mesh_{};
-    cwf::mesh::pre::Outputs                                 preprocess_{};
-    std::vector<cwf::physics::materials::ElasticProperties> materials_{};
-    cwf::physics::materials::RayleighCoefficients           rayleigh_{};
+    std::filesystem::path                                   test_data_dir;
+    cwf::config::Config                                     config{};
+    cwf::mesh::Mesh                                         mesh{};
+    cwf::mesh::pre::Outputs                                 preprocess{};
+    std::vector<cwf::physics::materials::ElasticProperties> materials;
+    cwf::physics::materials::RayleighCoefficients           rayleigh{};
 };
 
 /**
@@ -361,17 +361,17 @@ class DynamicValidationTest : public StaticValidationTest
     [[nodiscard]] auto estimate_fundamental_frequency(double initial_displacement, double simulation_time,
                                                       std::size_t num_steps) -> std::optional<double>
     {
-        const auto assembly  = cwf::physics::solver::assemble_linear_system(mesh_, preprocess_, materials_);
-        const auto dirichlet = cwf::physics::solver::build_dirichlet_conditions(mesh_, config_);
+        const auto assembly  = cwf::physics::solver::assemble_linear_system(mesh, preprocess, materials);
+        const auto dirichlet = cwf::physics::solver::build_dirichlet_conditions(mesh, config);
 
         cwf::physics::newmark::State state{};
-        const std::size_t            dofs = mesh_.nodes.size() * 3U;
+        const std::size_t            dofs = mesh.nodes.size() * 3U;
         state.displacement.assign(dofs, 0.0);
         state.velocity.assign(dofs, 0.0);
         state.acceleration.assign(dofs, 0.0);
 
         // apply initial displacement to free end nodes
-        for (std::size_t node = 0; node < mesh_.nodes.size(); ++node)
+        for (std::size_t node = 0; node < mesh.nodes.size(); ++node)
         {
             if (!dirichlet.mask[node * 3U + 2U]) // if z not constrained
             {
@@ -389,8 +389,8 @@ class DynamicValidationTest : public StaticValidationTest
         for (std::size_t step = 0; step < num_steps; ++step)
         {
             auto result = cwf::physics::solver::solve_newmark_step(
-                assembly, rayleigh_, dirichlet, mesh_, config_, preprocess_, coeffs, state, time,
-                config_.solver.runtime_tolerance, config_.solver.max_iterations);
+                assembly, rayleigh, dirichlet, mesh, config, preprocess, coeffs, state, time,
+                config.solver.runtime_tolerance, config.solver.max_iterations);
 
             if (!result.stats.converged)
             {
@@ -401,7 +401,7 @@ class DynamicValidationTest : public StaticValidationTest
             time += dt;
 
             // record tip displacement for frequency analysis
-            const double tip_z = state.displacement[(mesh_.nodes.size() - 1) * 3U + 2U];
+            const double tip_z = state.displacement[(mesh.nodes.size() - 1) * 3U + 2U];
             displacement_history.push_back(tip_z);
         }
 
@@ -483,21 +483,21 @@ class RegressionTest : public StaticValidationTest
     [[nodiscard]] auto check_energy_conservation(double tolerance = 0.05) -> bool
     {
         // temporarily disable damping for energy check
-        auto saved_damping = config_.damping;
-        config_.damping    = cwf::config::Damping{0.0, 1.0, 1.0};
-        rayleigh_          = cwf::physics::materials::compute_rayleigh(config_.damping);
+        auto saved_damping = config.damping;
+        config.damping     = cwf::config::Damping{.xi = 0.0, .w1 = 1.0, .w2 = 1.0};
+        rayleigh           = cwf::physics::materials::compute_rayleigh(config.damping);
 
-        const auto assembly  = cwf::physics::solver::assemble_linear_system(mesh_, preprocess_, materials_);
-        const auto dirichlet = cwf::physics::solver::build_dirichlet_conditions(mesh_, config_);
+        const auto assembly  = cwf::physics::solver::assemble_linear_system(mesh, preprocess, materials);
+        const auto dirichlet = cwf::physics::solver::build_dirichlet_conditions(mesh, config);
 
         cwf::physics::newmark::State state{};
-        const std::size_t            dofs = mesh_.nodes.size() * 3U;
+        const std::size_t            dofs = mesh.nodes.size() * 3U;
         state.displacement.assign(dofs, 0.0);
         state.velocity.assign(dofs, 0.0);
         state.acceleration.assign(dofs, 0.0);
 
         // apply initial displacement
-        for (std::size_t node = 0; node < mesh_.nodes.size(); ++node)
+        for (std::size_t node = 0; node < mesh.nodes.size(); ++node)
         {
             if (!dirichlet.mask[node * 3U + 2U])
             {
@@ -513,13 +513,13 @@ class RegressionTest : public StaticValidationTest
         for (std::size_t step = 0; step < 1000U; ++step)
         {
             auto result = cwf::physics::solver::solve_newmark_step(
-                assembly, rayleigh_, dirichlet, mesh_, config_, preprocess_, coeffs, state,
+                assembly, rayleigh, dirichlet, mesh, config, preprocess, coeffs, state,
                 static_cast<double>(step) * 0.0001, 1e-10, 500U);
 
             if (!result.stats.converged)
             {
-                config_.damping = saved_damping;
-                rayleigh_       = cwf::physics::materials::compute_rayleigh(config_.damping);
+                config.damping = saved_damping;
+                rayleigh       = cwf::physics::materials::compute_rayleigh(config.damping);
                 return false;
             }
 
@@ -541,8 +541,8 @@ class RegressionTest : public StaticValidationTest
             }
         }
 
-        config_.damping = saved_damping;
-        rayleigh_       = cwf::physics::materials::compute_rayleigh(config_.damping);
+        config.damping = saved_damping;
+        rayleigh       = cwf::physics::materials::compute_rayleigh(config.damping);
 
         return max_energy_deviation < tolerance;
     }
@@ -573,19 +573,19 @@ TEST_F(StaticValidationTest, CantileverBeamTipDeflection)
 
     // block dimensions and properties from config
     constexpr double height = 1.0;    // m
-    constexpr double E      = 3.0e10; // Pa (concrete)
+    constexpr double e      = 3.0e10; // Pa (concrete)
     constexpr double rho    = 2500.0; // kg/m³
     constexpr double g      = 9.81;   // m/s²
 
     // Expected compression under self-weight: delta = rho * g * h² / (2 * E)
-    const double expected_compression = (rho * g * height * height) / (2.0 * E);
+    const double expected_compression = (rho * g * height * height) / (2.0 * e);
 
     // Find bottom face compression
     double max_downward_disp = 0.0;
-    for (std::size_t node = 0; node < mesh_.nodes.size(); ++node)
+    for (std::size_t node = 0; node < mesh.nodes.size(); ++node)
     {
         // Top nodes should move down
-        if (mesh_.nodes[node].position[2] > 0.5)
+        if (mesh.nodes[node].position[2] > 0.5)
         {
             const double disp_z = state->displacement[node * 3U + 2U];
             if (disp_z < 0.0) // downward motion
@@ -626,8 +626,8 @@ TEST_F(StaticValidationTest, CantileverBeamMaxStress)
     EXPECT_GT(analytical_stress, 0.0) << "analytical stress should be positive";
 
     // verify materials are set up correctly
-    ASSERT_FALSE(materials_.empty());
-    EXPECT_NEAR(materials_[0].youngs_modulus, 2.0e11, 1e6) << "steel E should be ~200 GPa";
+    ASSERT_FALSE(materials.empty());
+    EXPECT_NEAR(materials[0].youngs_modulus, 2.0e11, 1e6) << "steel E should be ~200 GPa";
 }
 
 /**
@@ -669,9 +669,9 @@ TEST_F(StaticValidationTest, BlockUnderGravity)
     // block should compress under gravity
     // find top face nodes and check they moved downward
     bool found_downward_motion = false;
-    for (std::size_t node = 0; node < mesh_.nodes.size(); ++node)
+    for (std::size_t node = 0; node < mesh.nodes.size(); ++node)
     {
-        if (mesh_.nodes[node].position[2] > 0.5) // top half
+        if (mesh.nodes[node].position[2] > 0.5) // top half
         {
             if (state->displacement[node * 3U + 2U] < 0.0)
             {
@@ -693,7 +693,7 @@ TEST_F(StaticValidationTest, BlockUnderGravity)
  */
 TEST_F(StaticValidationTest, SolverConvergenceAllMeshes)
 {
-    std::vector<std::string> configs = {
+    std::vector<std::string> const configs = {
         "beam_validation.yaml", "plate_validation.yaml", "block_validation.yaml",
         "cantilever.yaml" // original test mesh
     };
@@ -702,7 +702,7 @@ TEST_F(StaticValidationTest, SolverConvergenceAllMeshes)
     {
         SCOPED_TRACE("Testing config: " + cfg_name);
 
-        bool loaded = load_test_case(cfg_name);
+        bool const loaded = load_test_case(cfg_name);
         if (!loaded)
         {
             // skip if file doesn't exist (not all configs required)
@@ -731,16 +731,16 @@ TEST_F(DynamicValidationTest, CantileverFirstModeFrequency)
     ASSERT_TRUE(load_test_case("beam_validation.yaml")) << "failed to load beam validation test case";
 
     // disable damping for free vibration
-    config_.damping = cwf::config::Damping{0.0, 1.0, 1.0};
-    rayleigh_       = cwf::physics::materials::compute_rayleigh(config_.damping);
+    config.damping = cwf::config::Damping{.xi = 0.0, .w1 = 1.0, .w2 = 1.0};
+    rayleigh       = cwf::physics::materials::compute_rayleigh(config.damping);
 
-    constexpr double E      = 2.0e11;
+    constexpr double e      = 2.0e11;
     constexpr double rho    = 7850.0;
     constexpr double length = 1.0;
     constexpr double width  = 0.1;
     constexpr double height = 0.1;
 
-    const double analytical_freq = analytical_cantilever_first_frequency(E, rho, length, width, height);
+    const double analytical_freq = analytical_cantilever_first_frequency(e, rho, length, width, height);
 
     // frequency estimation needs longer simulation with small timesteps
     // skip actual frequency comparison for coarse mesh (too inaccurate)
@@ -766,23 +766,23 @@ TEST_F(DynamicValidationTest, FreeVibrationOscillates)
     ASSERT_TRUE(load_test_case("block_validation.yaml")) << "failed to load block validation test case";
 
     // disable damping for free vibration
-    config_.damping = cwf::config::Damping{0.0, 1.0, 1.0};
-    rayleigh_       = cwf::physics::materials::compute_rayleigh(config_.damping);
+    config.damping = cwf::config::Damping{.xi = 0.0, .w1 = 1.0, .w2 = 1.0};
+    rayleigh       = cwf::physics::materials::compute_rayleigh(config.damping);
 
     // remove gravity - start from displaced position
-    config_.loads.gravity = {0.0, 0.0, 0.0};
+    config.loads.gravity = {0.0, 0.0, 0.0};
 
-    const auto assembly  = cwf::physics::solver::assemble_linear_system(mesh_, preprocess_, materials_);
-    const auto dirichlet = cwf::physics::solver::build_dirichlet_conditions(mesh_, config_);
+    const auto assembly  = cwf::physics::solver::assemble_linear_system(mesh, preprocess, materials);
+    const auto dirichlet = cwf::physics::solver::build_dirichlet_conditions(mesh, config);
 
     cwf::physics::newmark::State state{};
-    const std::size_t            dofs = mesh_.nodes.size() * 3U;
+    const std::size_t            dofs = mesh.nodes.size() * 3U;
     state.displacement.assign(dofs, 0.0);
     state.velocity.assign(dofs, 0.0);
     state.acceleration.assign(dofs, 0.0);
 
     // initial displacement on unconstrained nodes
-    for (std::size_t node = 0; node < mesh_.nodes.size(); ++node)
+    for (std::size_t node = 0; node < mesh.nodes.size(); ++node)
     {
         if (!dirichlet.mask[node * 3U + 2U])
         {
@@ -798,8 +798,8 @@ TEST_F(DynamicValidationTest, FreeVibrationOscillates)
 
     for (std::size_t step = 0; step < 50U; ++step)
     {
-        auto result = cwf::physics::solver::solve_newmark_step(assembly, rayleigh_, dirichlet, mesh_, config_,
-                                                               preprocess_, coeffs, state,
+        auto result = cwf::physics::solver::solve_newmark_step(assembly, rayleigh, dirichlet, mesh, config,
+                                                               preprocess, coeffs, state,
                                                                static_cast<double>(step) * 0.01, 1e-4, 500U);
 
         ASSERT_TRUE(result.stats.converged) << "solver should converge at step " << step;
@@ -807,7 +807,7 @@ TEST_F(DynamicValidationTest, FreeVibrationOscillates)
         state = std::move(result.state);
 
         // track sign changes of any unconstrained node
-        const double curr_disp = state.displacement[(mesh_.nodes.size() - 1) * 3U + 2U];
+        const double curr_disp = state.displacement[(mesh.nodes.size() - 1) * 3U + 2U];
 
         if ((prev_disp > 1e-10 && curr_disp < -1e-10) || (prev_disp < -1e-10 && curr_disp > 1e-10))
         {
@@ -860,9 +860,9 @@ TEST_F(RegressionTest, ZeroLoadEquilibrium)
     ASSERT_TRUE(load_test_case("block_validation.yaml")) << "failed to load test case";
 
     // override loads to zero
-    config_.loads.gravity = {0.0, 0.0, 0.0};
-    config_.loads.tractions.clear();
-    config_.loads.points.clear();
+    config.loads.gravity = {0.0, 0.0, 0.0};
+    config.loads.tractions.clear();
+    config.loads.points.clear();
 
     auto state = run_static_solver(0.1, 50U);
     ASSERT_TRUE(state.has_value()) << "solver should converge with zero load";
@@ -887,7 +887,7 @@ TEST_F(RegressionTest, DirichletConstraintsExact)
     auto state = run_static_solver(0.2, 30U);
     ASSERT_TRUE(state.has_value()) << "solver should converge";
 
-    const auto dirichlet = cwf::physics::solver::build_dirichlet_conditions(mesh_, config_);
+    const auto dirichlet = cwf::physics::solver::build_dirichlet_conditions(mesh, config);
 
     for (std::size_t dof = 0; dof < dirichlet.mask.size(); ++dof)
     {
@@ -911,14 +911,14 @@ TEST_F(RegressionTest, MassMatrixProperties)
     ASSERT_TRUE(load_test_case("block_validation.yaml")) << "failed to load test case";
 
     // all lumped masses positive
-    for (std::size_t i = 0; i < preprocess_.lumped_mass.size(); ++i)
+    for (std::size_t i = 0; i < preprocess.lumped_mass.size(); ++i)
     {
-        EXPECT_GT(preprocess_.lumped_mass[i], 0.0) << "lumped mass should be positive at node " << i;
+        EXPECT_GT(preprocess.lumped_mass[i], 0.0) << "lumped mass should be positive at node " << i;
     }
 
     // total mass should match ρ * V
     const double total_mass =
-        std::accumulate(preprocess_.lumped_mass.begin(), preprocess_.lumped_mass.end(), 0.0);
+        std::accumulate(preprocess.lumped_mass.begin(), preprocess.lumped_mass.end(), 0.0);
 
     // block is 1x1x1 m, concrete density 2500 kg/m³
     constexpr double expected_mass = 2500.0 * 1.0 * 1.0 * 1.0;
@@ -935,9 +935,9 @@ TEST_F(RegressionTest, StiffnessMatrixSymmetry)
 {
     ASSERT_TRUE(load_test_case("cantilever.yaml")) << "failed to load test case";
 
-    const auto assembly = cwf::physics::solver::assemble_linear_system(mesh_, preprocess_, materials_);
+    const auto assembly = cwf::physics::solver::assemble_linear_system(mesh, preprocess, materials);
 
-    const std::size_t n = mesh_.nodes.size() * 3U;
+    const std::size_t n = mesh.nodes.size() * 3U;
     ASSERT_EQ(assembly.stiffness.size(), n * n);
 
     for (std::size_t row = 0; row < n; ++row)

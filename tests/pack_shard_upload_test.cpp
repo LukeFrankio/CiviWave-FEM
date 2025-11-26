@@ -78,8 +78,10 @@ struct PackingFixtureInputs
     PackingFixtureInputs inputs{};
 
     // mesh -----------------------------------------------------------------
-    inputs.mesh.nodes = {mesh::Node{1U, make_vec3(0.0, 0.0, 0.0)}, mesh::Node{2U, make_vec3(1.0, 0.0, 0.0)},
-                         mesh::Node{3U, make_vec3(0.0, 1.0, 0.0)}, mesh::Node{4U, make_vec3(0.0, 0.0, 1.0)}};
+    inputs.mesh.nodes = {mesh::Node{.original_id = 1U, .position = make_vec3(0.0, 0.0, 0.0)},
+                         mesh::Node{.original_id = 2U, .position = make_vec3(1.0, 0.0, 0.0)},
+                         mesh::Node{.original_id = 3U, .position = make_vec3(0.0, 1.0, 0.0)},
+                         mesh::Node{.original_id = 4U, .position = make_vec3(0.0, 0.0, 1.0)}};
 
     mesh::Element tet{};
     tet.original_id      = 42U;
@@ -95,14 +97,14 @@ struct PackingFixtureInputs
     tet.physical_group   = 101U;
     inputs.mesh.elements = {tet};
 
-    inputs.mesh.physical_groups = {mesh::PhysicalGroup{3U, 101U, "SOLID"},
-                                   mesh::PhysicalGroup{2U, 202U, "FIXED_BASE"},
-                                   mesh::PhysicalGroup{0U, 303U, "POINT_PUSH"}};
+    inputs.mesh.physical_groups = {mesh::PhysicalGroup{.dimension = 3U, .id = 101U, .name = "SOLID"},
+                                   mesh::PhysicalGroup{.dimension = 2U, .id = 202U, .name = "FIXED_BASE"},
+                                   mesh::PhysicalGroup{.dimension = 0U, .id = 303U, .name = "POINT_PUSH"}};
 
-    inputs.mesh.surfaces = {mesh::Surface{77U,
-                                          mesh::SurfaceGeometry::Triangle3,
-                                          {0U, 1U, 2U, std::numeric_limits<std::uint32_t>::max()},
-                                          202U}};
+    inputs.mesh.surfaces = {mesh::Surface{.original_id = 77U,
+                                          .geometry    = mesh::SurfaceGeometry::Triangle3,
+                                          .nodes = {0U, 1U, 2U, std::numeric_limits<std::uint32_t>::max()},
+                                          .physical_group = 202U}};
 
     inputs.mesh.surface_groups = {{202U, {0U}}};
 
@@ -279,8 +281,9 @@ TEST(PackingPipeline, BuildPackedBuffersComputesReductionMetadata)
 TEST(ShardingPlanner, PlanShardsSingleBufferNoSplit)
 {
     using namespace gpu::shard;
-    std::vector<BufferSpecification> specs = {BufferSpecification{"nodes", 4096U, 256U},
-                                              BufferSpecification{"elements", 2048U, 256U}};
+    std::vector<BufferSpecification> const specs = {
+        BufferSpecification{.name = "nodes", .size_bytes = 4096U, .alignment = 256U},
+        BufferSpecification{.name = "elements", .size_bytes = 2048U, .alignment = 256U}};
     const auto                       plan  = plan_shards(specs, 1ULL << 20U, kDefaultAlignment);
     ASSERT_TRUE(plan.has_value());
     EXPECT_EQ(plan->segments.size(), 2U);
@@ -291,9 +294,9 @@ TEST(ShardingPlanner, PlanShardsSingleBufferNoSplit)
 TEST(ShardingPlanner, PlanShardsSpillsIntoMultipleBuffers)
 {
     using namespace gpu::shard;
-    std::vector<BufferSpecification> specs = {
-        BufferSpecification{"giant", kDefaultMaxBufferBytes - 1024U, 256U},
-        BufferSpecification{"tail", 8192U, 256U}};
+    std::vector<BufferSpecification> const specs = {
+        BufferSpecification{.name = "giant", .size_bytes = kDefaultMaxBufferBytes - 1024U, .alignment = 256U},
+        BufferSpecification{.name = "tail", .size_bytes = 8192U, .alignment = 256U}};
     const auto plan = plan_shards(specs, kDefaultMaxBufferBytes, kDefaultAlignment);
     ASSERT_TRUE(plan.has_value());
     ASSERT_GE(plan->device_buffer_sizes.size(), 2U);
@@ -304,8 +307,9 @@ TEST(ShardingPlanner, PlanShardsSpillsIntoMultipleBuffers)
 TEST(ShardingPlanner, PlanShardsHonorsPerSpecAlignment)
 {
     using namespace gpu::shard;
-    std::vector<BufferSpecification> specs = {BufferSpecification{"wide", 1024U, 1024U},
-                                              BufferSpecification{"narrow", 256U, 64U}};
+    std::vector<BufferSpecification> const specs = {
+        BufferSpecification{.name = "wide", .size_bytes = 1024U, .alignment = 1024U},
+        BufferSpecification{.name = "narrow", .size_bytes = 256U, .alignment = 64U}};
     const auto                       plan  = plan_shards(specs, 4096U, 128U);
     ASSERT_TRUE(plan.has_value());
     EXPECT_EQ(plan->segments.size(), 2U);
@@ -323,7 +327,8 @@ TEST(ShardingPlanner, PlanShardsRejectsGlobalAlignment)
 TEST(ShardingPlanner, PlanShardsRejectsSpecAlignment)
 {
     using namespace gpu::shard;
-    std::vector<BufferSpecification> specs = {BufferSpecification{"bad", 1024U, 96U}};
+    std::vector<BufferSpecification> const specs = {
+        BufferSpecification{.name = "bad", .size_bytes = 1024U, .alignment = 96U}};
     const auto                       plan  = plan_shards(specs, 2048U, 256U);
     ASSERT_FALSE(plan.has_value());
     EXPECT_THAT(plan.error().message, ::testing::HasSubstr("alignment"));
@@ -347,16 +352,20 @@ TEST(UploadScheduler, BuildUploadScheduleSingleChunk)
 {
     using namespace gpu;
     shard::ShardedLayout layout{};
-    layout.segments            = {{"nodes", 0U, 0U, 0U, 512U}};
+    layout.segments            = {{.name                = "nodes",
+                                   .device_buffer_index = 0U,
+                                   .device_offset       = 0U,
+                                   .source_offset       = 0U,
+                                   .size_bytes          = 512U}};
     layout.device_buffer_sizes = {512U};
     layout.max_buffer_bytes    = 2048U;
     layout.alignment           = 256U;
 
     std::vector<std::byte> nodes(512U);
-    auto                   buffers =
-        std::vector<upload::BufferView>{{"nodes", std::span<const std::byte>(nodes.data(), nodes.size())}};
+    auto                   buffers = std::vector<upload::BufferView>{
+        {.name = "nodes", .bytes = std::span<const std::byte>(nodes.data(), nodes.size())}};
 
-    const upload::StagingConfig staging{1024U, 256U};
+    const upload::StagingConfig staging{.chunk_bytes = 1024U, .alignment = 256U};
     const auto                  schedule = upload::build_upload_schedule(layout, buffers, staging);
     ASSERT_TRUE(schedule.has_value());
     ASSERT_EQ(schedule->commands.size(), 1U);
@@ -367,16 +376,20 @@ TEST(UploadScheduler, BuildUploadScheduleSplitsLargeSegment)
 {
     using namespace gpu;
     shard::ShardedLayout layout{};
-    layout.segments            = {{"nodes", 0U, 0U, 0U, 3000U}};
+    layout.segments            = {{.name                = "nodes",
+                                   .device_buffer_index = 0U,
+                                   .device_offset       = 0U,
+                                   .source_offset       = 0U,
+                                   .size_bytes          = 3000U}};
     layout.device_buffer_sizes = {3000U};
     layout.max_buffer_bytes    = 4096U;
     layout.alignment           = 256U;
 
     std::vector<std::byte> nodes(3000U);
-    auto                   buffers =
-        std::vector<upload::BufferView>{{"nodes", std::span<const std::byte>(nodes.data(), nodes.size())}};
+    auto                   buffers = std::vector<upload::BufferView>{
+        {.name = "nodes", .bytes = std::span<const std::byte>(nodes.data(), nodes.size())}};
 
-    const upload::StagingConfig staging{1024U, 256U};
+    const upload::StagingConfig staging{.chunk_bytes = 1024U, .alignment = 256U};
     const auto                  schedule = upload::build_upload_schedule(layout, buffers, staging);
     ASSERT_TRUE(schedule.has_value());
     EXPECT_GE(schedule->commands.size(), 3U);
@@ -388,7 +401,16 @@ TEST(UploadScheduler, BuildUploadScheduleHonorsMultipleBuffers)
 {
     using namespace gpu;
     shard::ShardedLayout layout{};
-    layout.segments            = {{"nodes", 0U, 0U, 0U, 1024U}, {"elements", 1U, 128U, 0U, 2048U}};
+    layout.segments            = {{.name                = "nodes",
+                                   .device_buffer_index = 0U,
+                                   .device_offset       = 0U,
+                                   .source_offset       = 0U,
+                                   .size_bytes          = 1024U},
+                                  {.name                = "elements",
+                                   .device_buffer_index = 1U,
+                                   .device_offset       = 128U,
+                                   .source_offset       = 0U,
+                                   .size_bytes          = 2048U}};
     layout.device_buffer_sizes = {1024U, 2176U};
     layout.max_buffer_bytes    = 4096U;
     layout.alignment           = 256U;
@@ -396,10 +418,10 @@ TEST(UploadScheduler, BuildUploadScheduleHonorsMultipleBuffers)
     std::vector<std::byte> nodes(1024U);
     std::vector<std::byte> elements(2048U);
     auto                   buffers = std::vector<upload::BufferView>{
-        {"nodes", std::span<const std::byte>(nodes.data(), nodes.size())},
-        {"elements", std::span<const std::byte>(elements.data(), elements.size())}};
+        {.name = "nodes", .bytes = std::span<const std::byte>(nodes.data(), nodes.size())},
+        {.name = "elements", .bytes = std::span<const std::byte>(elements.data(), elements.size())}};
 
-    const upload::StagingConfig staging{4096U, 256U};
+    const upload::StagingConfig staging{.chunk_bytes = 4096U, .alignment = 256U};
     const auto                  schedule = upload::build_upload_schedule(layout, buffers, staging);
     ASSERT_TRUE(schedule.has_value());
     ASSERT_EQ(schedule->commands.size(), 2U);
@@ -411,16 +433,20 @@ TEST(UploadScheduler, BuildUploadScheduleRejectsInvalidStaging)
 {
     using namespace gpu;
     shard::ShardedLayout layout{};
-    layout.segments            = {{"nodes", 0U, 0U, 0U, 512U}};
+    layout.segments            = {{.name                = "nodes",
+                                   .device_buffer_index = 0U,
+                                   .device_offset       = 0U,
+                                   .source_offset       = 0U,
+                                   .size_bytes          = 512U}};
     layout.device_buffer_sizes = {512U};
     layout.max_buffer_bytes    = 4096U;
     layout.alignment           = 256U;
 
     std::vector<std::byte> nodes(512U);
-    auto                   buffers =
-        std::vector<upload::BufferView>{{"nodes", std::span<const std::byte>(nodes.data(), nodes.size())}};
+    auto                   buffers = std::vector<upload::BufferView>{
+        {.name = "nodes", .bytes = std::span<const std::byte>(nodes.data(), nodes.size())}};
 
-    const upload::StagingConfig staging{0U, 0U};
+    const upload::StagingConfig staging{.chunk_bytes = 0U, .alignment = 0U};
     const auto                  schedule = upload::build_upload_schedule(layout, buffers, staging);
     ASSERT_FALSE(schedule.has_value());
     EXPECT_THAT(schedule.error().message, ::testing::HasSubstr("staging"));
@@ -430,12 +456,16 @@ TEST(UploadScheduler, BuildUploadScheduleRejectsMissingBuffer)
 {
     using namespace gpu;
     shard::ShardedLayout layout{};
-    layout.segments            = {{"nodes", 0U, 0U, 0U, 256U}};
+    layout.segments            = {{.name                = "nodes",
+                                   .device_buffer_index = 0U,
+                                   .device_offset       = 0U,
+                                   .source_offset       = 0U,
+                                   .size_bytes          = 256U}};
     layout.device_buffer_sizes = {256U};
     layout.max_buffer_bytes    = 4096U;
     layout.alignment           = 256U;
 
-    const upload::StagingConfig staging{1024U, 256U};
+    const upload::StagingConfig staging{.chunk_bytes = 1024U, .alignment = 256U};
     const auto                  schedule = upload::build_upload_schedule(layout, {}, staging);
     ASSERT_FALSE(schedule.has_value());
     EXPECT_THAT(schedule.error().message, ::testing::HasSubstr("missing"));
@@ -445,16 +475,20 @@ TEST(UploadScheduler, BuildUploadScheduleReportsTotalBytes)
 {
     using namespace gpu;
     shard::ShardedLayout layout{};
-    layout.segments            = {{"nodes", 0U, 0U, 0U, 600U}};
+    layout.segments            = {{.name                = "nodes",
+                                   .device_buffer_index = 0U,
+                                   .device_offset       = 0U,
+                                   .source_offset       = 0U,
+                                   .size_bytes          = 600U}};
     layout.device_buffer_sizes = {600U};
     layout.max_buffer_bytes    = 4096U;
     layout.alignment           = 256U;
 
     std::vector<std::byte> nodes(600U);
-    auto                   buffers =
-        std::vector<upload::BufferView>{{"nodes", std::span<const std::byte>(nodes.data(), nodes.size())}};
+    auto                   buffers = std::vector<upload::BufferView>{
+        {.name = "nodes", .bytes = std::span<const std::byte>(nodes.data(), nodes.size())}};
 
-    const upload::StagingConfig staging{512U, 256U};
+    const upload::StagingConfig staging{.chunk_bytes = 512U, .alignment = 256U};
     const auto                  schedule = upload::build_upload_schedule(layout, buffers, staging);
     ASSERT_TRUE(schedule.has_value());
     EXPECT_EQ(schedule->total_bytes, 600U);

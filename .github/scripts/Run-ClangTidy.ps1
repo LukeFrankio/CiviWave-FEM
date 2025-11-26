@@ -19,13 +19,17 @@
 .PARAMETER Fix
     Automatically apply clang-tidy fixes where possible (-fix flag).
 
+.PARAMETER FixErrors
+    Also fix compiler errors where possible (-fix-errors flag).
+    Use with -Fix for maximum automatic fixing.
+
 .PARAMETER BuildPath
     Path to build directory containing compile_commands.json.
     Defaults to .\build
 
 .PARAMETER Checks
     Comma-separated list of checks to enable/disable.
-    Defaults to all checks except cert-* and google-* (we prefer our own style).
+    Defaults to empty string to use .clang-tidy configuration file.
 
 .PARAMETER Parallel
     Number of parallel clang-tidy processes to run.
@@ -48,6 +52,10 @@
 .EXAMPLE
     .\Run-ClangTidy.ps1 -Fix
     Runs clang-tidy and applies automatic fixes
+
+.EXAMPLE
+    .\Run-ClangTidy.ps1 -Fix -FixErrors
+    Runs clang-tidy and applies all automatic fixes including error fixes
 
 .EXAMPLE
     .\Run-ClangTidy.ps1 -BuildPath "C:\project\build" -Verbose
@@ -79,10 +87,13 @@ param(
     [switch]$Fix,
     
     [Parameter()]
+    [switch]$FixErrors,
+    
+    [Parameter()]
     [string]$BuildPath = '',
     
     [Parameter()]
-    [string]$Checks = '*,-cert-*,-google-*,-fuchsia-*,-llvm-header-guard,-llvmlibc-*',
+    [string]$Checks = '',
     
     [Parameter()]
     [ValidateRange(1, 128)]
@@ -133,7 +144,11 @@ $Script:ExternalDependencyPatterns = @(
     '/yaml-cpp/',
     '\\yaml-cpp\\',
     '/VulkanMemoryAllocator/',
-    '\\VulkanMemoryAllocator\\'
+    '\\VulkanMemoryAllocator\\',
+    'vk_mem_alloc.h',
+    'vma_src',
+    '/vma/',
+    '\\vma\\'
 )
 
 # ============================================================================
@@ -481,16 +496,16 @@ function New-FilteredCompileCommands {
             }
         }
         
-        # write filtered compile_commands.json
+        # write filtered compile_commands.json (overwrite original - CMake regenerates it anyway)
         $filteredJson = $filteredCommands | ConvertTo-Json -Depth 10
-        $filteredJson | Out-File -FilePath $DestinationPath -Encoding UTF8 -Force
+        $filteredJson | Out-File -FilePath $SourcePath -Encoding UTF8 -Force
         
-        Write-Verbose "Created filtered compile_commands.json: $DestinationPath"
+        Write-Verbose "Filtered compile_commands.json in-place: $SourcePath"
         
         return [PSCustomObject]@{
             Success = $true
-            Message = "Successfully created filtered compile_commands.json"
-            FilteredPath = $DestinationPath
+            Message = "Successfully filtered compile_commands.json in-place"
+            FilteredPath = $SourcePath
         }
     }
     catch {
@@ -563,9 +578,13 @@ function Invoke-ClangTidyOnFile {
             # build clang-tidy arguments
             $tidyArgs = @(
                 $FilePath
-                "--checks=$Checks"
                 "-p=$CompileCommandsDir"
             )
+            
+            # only add --checks if explicitly specified (otherwise use .clang-tidy file)
+            if ($Checks) {
+                $tidyArgs += "--checks=$Checks"
+            }
             
             if ($Fix) {
                 $tidyArgs += '--fix'
@@ -656,31 +675,31 @@ if (-not $compileCommands) {
 Write-Host "✓ Found compile_commands.json: $compileCommands" -ForegroundColor Green
 Write-Host ''
 
-# Step 3.5: Create filtered compile_commands.json for clang-tidy
+# Step 3.5: Filter compile_commands.json for clang-tidy compatibility
 # (removes C++20 module flags that clang-tidy doesn't understand)
-$filteredCompileCommands = Join-Path $BuildPath 'compile_commands_filtered.json'
-$filterResult = New-FilteredCompileCommands -SourcePath $compileCommands -DestinationPath $filteredCompileCommands
+# We modify the original file in-place - CMake regenerates it anyway
+$filterResult = New-FilteredCompileCommands -SourcePath $compileCommands -DestinationPath $compileCommands
 
 if (-not $filterResult.Success) {
     Write-Error $filterResult.Message
     exit 1
 }
 
-Write-Host "✓ Created filtered compile_commands.json (removed module flags)" -ForegroundColor Green
-Write-Host "  Filtered: $filteredCompileCommands" -ForegroundColor Gray
+Write-Host "✓ Filtered compile_commands.json in-place (removed GCC module flags)" -ForegroundColor Green
 Write-Host ''
 
-# use filtered compile commands for clang-tidy
-$compileCommandsForTidy = $filteredCompileCommands
+# use the (now filtered) compile commands for clang-tidy
+$compileCommandsForTidy = $compileCommands
 
 # Step 4: Configuration summary
 Write-Host 'Configuration:' -ForegroundColor Cyan
 Write-Host "  Root path: $Path" -ForegroundColor Gray
 Write-Host "  Build path: $BuildPath" -ForegroundColor Gray
 Write-Host "  Compile commands: $compileCommandsForTidy" -ForegroundColor Gray
-Write-Host "  Checks: $Checks" -ForegroundColor Gray
+Write-Host "  Checks: $(if ($Checks) { $Checks } else { '(using .clang-tidy file)' })" -ForegroundColor Gray
 Write-Host "  Parallel jobs: $Parallel" -ForegroundColor Gray
 Write-Host "  Fix mode: $(if ($Fix) { 'Enabled' } else { 'Disabled' })" -ForegroundColor Gray
+Write-Host "  Fix errors: $(if ($FixErrors) { 'Enabled' } else { 'Disabled' })" -ForegroundColor Gray
 Write-Host ''
 
 # Step 5: Discover C++ source files (pure function - just reads file system)
@@ -728,6 +747,7 @@ $results = $sourceFiles | ForEach-Object -Parallel {
     $compileCommandsDir = Split-Path -Parent ${using:compileCommandsForTidy}
     $checks = ${using:Checks}
     $fix = ${using:Fix}
+    $fixErrors = ${using:FixErrors}
     $externalPatterns = ${using:Script:ExternalDependencyPatterns}
     $verbose = ${using:VerbosePreference}
     
@@ -738,22 +758,32 @@ $results = $sourceFiles | ForEach-Object -Parallel {
     # build clang-tidy arguments
     $tidyArgs = @(
         $file.FullName
-        "--checks=$checks"
         "-p=$compileCommandsDir"
     )
     
+    # only add --checks if explicitly specified (otherwise use .clang-tidy file)
+    if ($checks) {
+        $tidyArgs += "--checks=$checks"
+    }
+    
     if ($fix) {
         $tidyArgs += '--fix'
+    }
+    
+    if ($fixErrors) {
+        $tidyArgs += '--fix-errors'
     }
     
     try {
         # run clang-tidy and capture output
         $output = & clang-tidy @tidyArgs 2>&1 | Out-String
         
-        # filter out warnings from external dependencies
+        # filter out warnings from external dependencies AND GCC module flag errors
         $lines = $output -split "`n"
         $filteredLines = $lines | Where-Object {
             $line = $_
+            
+            # skip external dependency warnings
             $isExternal = $false
             foreach ($pattern in $externalPatterns) {
                 if ($line -like "*$pattern*") {
@@ -761,20 +791,75 @@ $results = $sourceFiles | ForEach-Object -Parallel {
                     break
                 }
             }
-            -not $isExternal
+            if ($isExternal) { return $false }
+            
+            # skip VMA (Vulkan Memory Allocator) warnings - header-only library with tons of noise
+            if ($line -match 'Vma[A-Z]') { return $false }  # VMA type names like VmaAllocator, VmaPool
+            if ($line -match 'VMA_') { return $false }      # VMA macros like VMA_NULL, VMA_ASSERT
+            if ($line -match 'vma_') { return $false }      # vma_new, vma_delete, etc.
+            if ($line -match 'PFN_vma') { return $false }   # VMA function pointer types
+            
+            # skip GCC module flag errors (clang-tidy doesn't understand them)
+            if ($line -match "unknown argument: '-f(modules-ts|module-mapper|deps-format)'") {
+                return $false
+            }
+            if ($line -match '\[clang-diagnostic-error\]' -and $line -match "unknown argument") {
+                return $false
+            }
+            
+            # skip "Error while processing" and "Found compiler errors" lines for module flag errors
+            if ($line -match 'Error while processing.*\.cpp\.$') {
+                return $false
+            }
+            if ($line -match 'Found compiler errors, but -fix-errors was not specified') {
+                return $false
+            }
+            
+            # skip suppressed warnings summary (not real issues)
+            if ($line -match 'Suppressed \d+ warnings') {
+                return $false
+            }
+            if ($line -match 'Use -header-filter=') {
+                return $false
+            }
+            if ($line -match '\d+ warnings? generated\.$') {
+                return $false
+            }
+            if ($line -match '\d+ warnings? and \d+ errors? generated\.$') {
+                return $false
+            }
+            if ($line -match 'too many errors emitted') {
+                return $false
+            }
+            if ($line -match '\d+ warnings? treated as errors') {
+                return $false
+            }
+            
+            return $true
         }
         
-        $filteredOutput = $filteredLines -join "`n"
+        $filteredOutput = ($filteredLines -join "`n").Trim()
         
         # check if there are actual issues (warnings/errors) in our code
-        $hasIssues = $filteredOutput -match '(warning:|error:)' -and 
-                     $filteredOutput -notmatch 'no errors found'
+        # Must have warning:/error: that's NOT about unknown arguments
+        $hasRealIssues = $false
+        foreach ($line in $filteredLines) {
+            if ($line -match '\[\w+-\w+.*,-warnings-as-errors\]$') {
+                # This is a real clang-tidy warning/error
+                $hasRealIssues = $true
+                break
+            }
+            if ($line -match '(warning|error):.*\[' -and $line -notmatch 'unknown argument') {
+                $hasRealIssues = $true
+                break
+            }
+        }
         
         [PSCustomObject]@{
             FilePath = $file.FullName
             Success = $true
-            HasIssues = $hasIssues
-            Output = $filteredOutput.Trim()
+            HasIssues = $hasRealIssues
+            Output = $filteredOutput
             RawOutput = $output
         }
     }

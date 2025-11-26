@@ -41,10 +41,10 @@ constexpr std::size_t kMaxIterations = 64U;
 {
     cwf::mesh::Mesh mesh{};
     mesh.nodes = {
-        cwf::mesh::Node{0U, cwf::common::Vec3{0.0, 0.0, 0.0}},
-        cwf::mesh::Node{1U, cwf::common::Vec3{1.0, 0.0, 0.0}},
-        cwf::mesh::Node{2U, cwf::common::Vec3{0.0, 1.0, 0.0}},
-        cwf::mesh::Node{3U, cwf::common::Vec3{0.0, 0.0, 1.0}},
+        cwf::mesh::Node{.original_id = 0U, .position = cwf::common::Vec3{0.0, 0.0, 0.0}},
+        cwf::mesh::Node{.original_id = 1U, .position = cwf::common::Vec3{1.0, 0.0, 0.0}},
+        cwf::mesh::Node{.original_id = 2U, .position = cwf::common::Vec3{0.0, 1.0, 0.0}},
+        cwf::mesh::Node{.original_id = 3U, .position = cwf::common::Vec3{0.0, 0.0, 1.0}},
     };
 
     cwf::mesh::Element tet{};
@@ -69,9 +69,9 @@ constexpr std::size_t kMaxIterations = 64U;
     mesh.surfaces.push_back(fixed);
 
     mesh.physical_groups = {
-        cwf::mesh::PhysicalGroup{3U, 1U, "SOLID"},
-        cwf::mesh::PhysicalGroup{2U, 2U, "FIXED"},
-        cwf::mesh::PhysicalGroup{0U, 3U, "POINT"},
+        cwf::mesh::PhysicalGroup{.dimension = 3U, .id = 1U, .name = "SOLID"},
+        cwf::mesh::PhysicalGroup{.dimension = 2U, .id = 2U, .name = "FIXED"},
+        cwf::mesh::PhysicalGroup{.dimension = 0U, .id = 3U, .name = "POINT"},
     };
     for (std::size_t i = 0; i < mesh.physical_groups.size(); ++i)
     {
@@ -162,45 +162,45 @@ class NewmarkStepperFixture : public ::testing::Test
   protected:
     void SetUp() override
     {
-        mesh_ = make_single_tet_mesh();
-        cfg_  = make_basic_config();
+        mesh = make_single_tet_mesh();
+        cfg  = make_basic_config();
 
-        const auto preprocess_result = cwf::mesh::pre::run(mesh_, cfg_);
+        const auto preprocess_result = cwf::mesh::pre::run(mesh, cfg);
         ASSERT_TRUE(preprocess_result.has_value());
-        preprocess_ = preprocess_result.value();
+        preprocess = preprocess_result.value();
 
-        const auto pack_result = cwf::mesh::pack::build_packed_buffers(mesh_, preprocess_, cfg_, {});
+        const auto pack_result = cwf::mesh::pack::build_packed_buffers(mesh, preprocess, cfg, {});
         ASSERT_TRUE(pack_result.has_value());
-        base_pack_ = pack_result.value();
+        base_pack = pack_result.value();
 
-        materials_ = make_materials(cfg_);
-        assembly_  = cwf::physics::solver::assemble_linear_system(mesh_, preprocess_, materials_);
-        dirichlet_ = cwf::physics::solver::build_dirichlet_conditions(mesh_, cfg_);
-        rayleigh_  = cwf::physics::materials::compute_rayleigh(cfg_.damping);
+        materials = make_materials(cfg);
+        assembly  = cwf::physics::solver::assemble_linear_system(mesh, preprocess, materials);
+        dirichlet = cwf::physics::solver::build_dirichlet_conditions(mesh, cfg);
+        rayleigh  = cwf::physics::materials::compute_rayleigh(cfg.damping);
     }
 
     [[nodiscard]] auto make_stepper(cwf::mesh::pack::PackingResult   &pack,
                                     const cwf::config::TimeSettings  &time_settings,
                                     cwf::gpu::newmark::AdaptivePolicy policy = {}) const -> Stepper
     {
-        return Stepper(pack, std::span<const cwf::physics::materials::ElasticProperties>{materials_},
-                       rayleigh_, cfg_.solver, time_settings, policy);
+        return Stepper(pack, std::span<const cwf::physics::materials::ElasticProperties>{materials}, rayleigh,
+                       cfg.solver, time_settings, policy);
     }
 
-    cwf::mesh::Mesh                                         mesh_{};
-    cwf::config::Config                                     cfg_{};
-    cwf::mesh::pre::Outputs                                 preprocess_{};
-    cwf::mesh::pack::PackingResult                          base_pack_{};
-    std::vector<cwf::physics::materials::ElasticProperties> materials_{};
-    cwf::physics::solver::Assembly                          assembly_{};
-    cwf::physics::solver::DirichletConditions               dirichlet_{};
-    cwf::physics::materials::RayleighCoefficients           rayleigh_{};
+    cwf::mesh::Mesh                                         mesh{};
+    cwf::config::Config                                     cfg{};
+    cwf::mesh::pre::Outputs                                 preprocess{};
+    cwf::mesh::pack::PackingResult                          base_pack{};
+    std::vector<cwf::physics::materials::ElasticProperties> materials;
+    cwf::physics::solver::Assembly                          assembly{};
+    cwf::physics::solver::DirichletConditions               dirichlet{};
+    cwf::physics::materials::RayleighCoefficients           rayleigh{};
 };
 
 TEST_F(NewmarkStepperFixture, StepMatchesCpuReferenceState)
 {
-    auto pack              = base_pack_;
-    auto time_settings     = cfg_.time;
+    auto pack              = base_pack;
+    auto time_settings     = cfg.time;
     time_settings.adaptive = false;
 
     auto stepper   = make_stepper(pack, time_settings);
@@ -214,7 +214,7 @@ TEST_F(NewmarkStepperFixture, StepMatchesCpuReferenceState)
 
     const auto coeffs    = cwf::physics::newmark::make_coefficients(kDt, 0.25, 0.5);
     const auto reference = cwf::physics::solver::solve_newmark_step(
-        assembly_, rayleigh_, dirichlet_, mesh_, cfg_, preprocess_, coeffs, previous,
+        assembly, rayleigh, dirichlet, mesh, cfg, preprocess, coeffs, previous,
         /*time=*/0.0, kRuntimeTol, kMaxIterations);
 
     const auto displacement = flatten_field(pack.buffers.nodes.displacement);
@@ -234,8 +234,8 @@ TEST_F(NewmarkStepperFixture, StepMatchesCpuReferenceState)
 
 TEST_F(NewmarkStepperFixture, PauseModeUsesTighterTolerance)
 {
-    auto       pack          = base_pack_;
-    auto       time_settings = cfg_.time;
+    auto       pack          = base_pack;
+    auto       time_settings = cfg.time;
     auto       stepper       = make_stepper(pack, time_settings);
     const auto telemetry     = stepper.step(0.0, /*paused_mode=*/true);
     ASSERT_TRUE(telemetry.has_value());
@@ -245,8 +245,8 @@ TEST_F(NewmarkStepperFixture, PauseModeUsesTighterTolerance)
 
 TEST_F(NewmarkStepperFixture, AdaptiveDtIncreasesWhenIterationsAreLow)
 {
-    auto pack              = base_pack_;
-    auto time_settings     = cfg_.time;
+    auto pack              = base_pack;
+    auto time_settings     = cfg.time;
     time_settings.adaptive = true;
     time_settings.max_dt   = 0.02; // clamp growth to avoid runaway
 

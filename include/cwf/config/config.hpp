@@ -48,7 +48,7 @@
 #include <utility>
 #include <vector>
 
-namespace YAML
+namespace YAML /* NOLINT(readability-identifier-naming) */
 {
 class Node;
 } // namespace YAML

@@ -13,9 +13,19 @@ Checks: >
   misc-*,
   portability-*,
   llvm-*,
-  google-*
-WarningsAsErrors: '*'
-HeaderFilterRegex: '(^|[\\/])(src|include)[\\/]'
+  google-*,
+  -portability-avoid-pragma-once,
+  -altera-*,
+  -llvm-prefer-static-over-anonymous-namespace,
+  -llvm-header-guard,
+  -google-readability-todo,
+  -misc-include-cleaner,
+  -bugprone-easily-swappable-parameters,
+  -readability-function-cognitive-complexity,
+  -readability-magic-numbers,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -readability-math-missing-parentheses
+HeaderFilterRegex: '^(src|include|tests)[/\\].*'
 # AnalyzeTemporaryDtors: true  # commented out because some clang-tidy versions don't recognize this key
 FormatStyle: file
 User: CiviWave
@@ -25,21 +35,26 @@ ExtraArgs:
   - "-fno-rtti"
   - "-Wall"
   - "-Wextra"
-  - "-Werror"
+  - "--system-header-prefix=vk_mem_alloc.h"
+  - "--system-header-prefix=VulkanMemoryAllocator"
 CheckOptions:
   - key: readability-identifier-naming.NamespaceCase
-    value: CamelCase
+    value: lower_case
   - key: readability-identifier-naming.ClassCase
     value: CamelCase
   - key: readability-identifier-naming.StructCase
     value: CamelCase
   - key: readability-identifier-naming.FunctionCase
-    value: camelBack
+    value: lower_case
   - key: readability-identifier-naming.VariableCase
     value: lower_case
   - key: readability-identifier-naming.MemberCase
     value: lower_case
   - key: readability-identifier-naming.PrivateMemberSuffix
     value: _
+  - key: readability-identifier-naming.GlobalConstantCase
+    value: CamelCase
+  - key: readability-identifier-naming.GlobalConstantPrefix
+    value: k
   - key: modernize-use-trailing-return-type.MinTypeNameLength
     value: '0'

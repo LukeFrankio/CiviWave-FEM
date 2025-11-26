@@ -26,10 +26,10 @@ namespace cwf::gpu
 namespace
 {
 
-constexpr std::array required_instance_extensions{VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
-                                                  VK_EXT_DEBUG_UTILS_EXTENSION_NAME};
+constexpr std::array kRequiredInstanceExtensions{VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
+                                                 VK_EXT_DEBUG_UTILS_EXTENSION_NAME};
 
-constexpr std::array required_device_extensions{VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME};
+constexpr std::array kRequiredDeviceExtensions{VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME};
 
 [[nodiscard]] auto make_error(std::string message, VkResult result, std::initializer_list<std::string> ctx)
     -> VulkanError
@@ -72,8 +72,9 @@ constexpr std::array required_device_extensions{VK_EXT_DESCRIPTOR_BUFFER_EXTENSI
 
 [[nodiscard]] auto has_layer(std::span<const VkLayerProperties> layers, std::string_view name) -> bool
 {
-    return std::ranges::any_of(
-        layers, [name](const VkLayerProperties &layer) { return std::string_view{layer.layerName} == name; });
+    return std::ranges::any_of(layers, [name](const VkLayerProperties &layer) -> bool {
+        return std::string_view{layer.layerName} == name;
+    });
 }
 
 [[nodiscard]] auto enumerate_instance_extensions() -> std::vector<VkExtensionProperties>
@@ -91,7 +92,7 @@ constexpr std::array required_device_extensions{VK_EXT_DESCRIPTOR_BUFFER_EXTENSI
 [[nodiscard]] auto has_extension(std::span<const VkExtensionProperties> extensions, std::string_view name)
     -> bool
 {
-    return std::ranges::any_of(extensions, [name](const VkExtensionProperties &ext) {
+    return std::ranges::any_of(extensions, [name](const VkExtensionProperties &ext) -> bool {
         return std::string_view{ext.extensionName} == name;
     });
 }
@@ -183,8 +184,8 @@ constexpr std::array required_device_extensions{VK_EXT_DESCRIPTOR_BUFFER_EXTENSI
     }
 
     std::vector<const char *> enabled_extensions;
-    enabled_extensions.reserve(required_instance_extensions.size());
-    for (const auto &ext_name : required_instance_extensions)
+    enabled_extensions.reserve(kRequiredInstanceExtensions.size());
+    for (const auto &ext_name : kRequiredInstanceExtensions)
     {
         if (!has_extension(extensions, ext_name))
         {
@@ -303,8 +304,9 @@ struct DeviceSelection
         }
 
         const auto extensions       = enumerate_device_extensions(device);
-        const bool has_all_required = std::ranges::all_of(
-            required_device_extensions, [&](const char *ext) { return has_extension(extensions, ext); });
+        const bool has_all_required =
+            std::ranges::all_of(kRequiredDeviceExtensions,
+                                [&](const char *ext) -> bool { return has_extension(extensions, ext); });
         if (info.require_descriptor_buffer && !has_all_required)
         {
             continue;
@@ -363,8 +365,8 @@ struct DeviceSelection
             descriptor_props.descriptorBufferOffsetAlignment;
 
         std::vector<const char *> enabled_extensions;
-        enabled_extensions.reserve(required_device_extensions.size());
-        for (const auto &ext : required_device_extensions)
+        enabled_extensions.reserve(kRequiredDeviceExtensions.size());
+        for (const auto &ext : kRequiredDeviceExtensions)
         {
             if (has_extension(extensions, ext))
             {
@@ -404,7 +406,7 @@ struct DeviceSelection
     auto preferred_it = candidates.end();
     if (!info.device_index.has_value() && !info.preferred_device_substring.empty())
     {
-        preferred_it = std::ranges::find_if(candidates, [&](const Candidate &candidate) {
+        preferred_it = std::ranges::find_if(candidates, [&](const Candidate &candidate) -> bool {
             return std::string_view{candidate.properties.deviceName}.find(info.preferred_device_substring) !=
                    std::string_view::npos;
         });
@@ -664,7 +666,7 @@ auto VulkanContext::create(const ContextCreateInfo &info) -> std::expected<Vulka
         return std::unexpected(allocator_result.error());
     }
 
-    auto allocator = *allocator_result;
+    auto *allocator = *allocator_result;
 
     auto staging_result = create_staging_ring(allocator, info.staging_buffer_bytes);
     if (!staging_result)
@@ -810,7 +812,7 @@ void VulkanContext::push_debug_label(VkCommandBuffer cmd, std::string_view name,
     VkDebugUtilsLabelEXT label{};
     label.sType      = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
     label.pLabelName = name.data();
-    std::copy(color.begin(), color.end(), label.color);
+    std::ranges::copy(color, label.color);
     begin_label_fn_(cmd, &label);
 }
 

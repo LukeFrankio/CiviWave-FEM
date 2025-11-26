@@ -145,7 +145,7 @@ struct DataArraySpec
         throw std::runtime_error("VTU block exceeds UInt32 header limit");
     }
     const std::size_t   offset       = blob.size();
-    const std::uint32_t payload_size = static_cast<std::uint32_t>(byte_count);
+    const auto          payload_size = static_cast<std::uint32_t>(byte_count);
     const auto         *size_ptr     = reinterpret_cast<const std::uint8_t *>(&payload_size);
     blob.insert(blob.end(), size_ptr, size_ptr + sizeof(std::uint32_t));
     const auto *bytes = reinterpret_cast<const std::uint8_t *>(data);
@@ -243,9 +243,9 @@ auto write_vtu(const std::filesystem::path &path, const mesh::Mesh &mesh,
                 "header_type=\"UInt32\">\n";
         file << "  <UnstructuredGrid>\n";
         file << "    <FieldData>\n";
-        file << "      <DataArray type=\"Float64\" Name=\"time\" NumberOfTuples=\"1\">" << simulation_time
+        file << R"(      <DataArray type="Float64" Name="time" NumberOfTuples="1">)" << simulation_time
              << "</DataArray>\n";
-        file << "      <DataArray type=\"UInt32\" Name=\"frame\" NumberOfTuples=\"1\">" << frame_index
+        file << R"(      <DataArray type="UInt32" Name="frame" NumberOfTuples="1">)" << frame_index
              << "</DataArray>\n";
         file << "    </FieldData>\n";
         file << "    <Piece NumberOfPoints=\"" << packing.metadata.node_count << "\" NumberOfCells=\""
@@ -255,7 +255,7 @@ auto write_vtu(const std::filesystem::path &path, const mesh::Mesh &mesh,
         for (const auto &spec : point_arrays)
         {
             file << "        <DataArray type=\"" << spec.type << "\" Name=\"" << spec.name
-                 << "\" NumberOfComponents=\"" << spec.components << "\" format=\"appended\" offset=\""
+                 << "\" NumberOfComponents=\"" << spec.components << R"(" format="appended" offset=")"
                  << spec.offset << "\"/>\n";
         }
         file << "      </PointData>\n";
@@ -264,23 +264,23 @@ auto write_vtu(const std::filesystem::path &path, const mesh::Mesh &mesh,
         for (const auto &spec : cell_arrays)
         {
             file << "        <DataArray type=\"" << spec.type << "\" Name=\"" << spec.name
-                 << "\" NumberOfComponents=\"" << spec.components << "\" format=\"appended\" offset=\""
+                 << "\" NumberOfComponents=\"" << spec.components << R"(" format="appended" offset=")"
                  << spec.offset << "\"/>\n";
         }
         file << "      </CellData>\n";
 
         file << "      <Points>\n";
-        file << "        <DataArray type=\"Float32\" NumberOfComponents=\"3\" format=\"appended\" offset=\""
+        file << R"(        <DataArray type="Float32" NumberOfComponents="3" format="appended" offset=")"
              << points_offset << "\"/>\n";
         file << "      </Points>\n";
 
         file << "      <Cells>\n";
-        file << "        <DataArray type=\"Int32\" Name=\"connectivity\" format=\"appended\" offset=\""
+        file << R"(        <DataArray type="Int32" Name="connectivity" format="appended" offset=")"
              << connectivity_offset << "\"/>\n";
-        file << "        <DataArray type=\"Int32\" Name=\"offsets\" format=\"appended\" offset=\""
+        file << R"(        <DataArray type="Int32" Name="offsets" format="appended" offset=")"
              << offsets_offset << "\"/>\n";
-        file << "        <DataArray type=\"UInt8\" Name=\"types\" format=\"appended\" offset=\""
-             << types_offset << "\"/>\n";
+        file << R"(        <DataArray type="UInt8" Name="types" format="appended" offset=")" << types_offset
+             << "\"/>\n";
         file << "      </Cells>\n";
 
         file << "    </Piece>\n";

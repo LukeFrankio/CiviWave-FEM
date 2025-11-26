@@ -8,6 +8,7 @@
 #include <cmath>
 #include <format>
 #include <limits>
+#include <numbers>
 #include <unordered_map>
 
 namespace cwf::mesh::pre
@@ -20,7 +21,7 @@ using common::Vec3;
 [[nodiscard]] auto make_error(std::string message, std::vector<std::string> ctx)
     -> std::expected<Outputs, PreprocessError>
 {
-    return std::unexpected(PreprocessError{std::move(message), std::move(ctx)});
+    return std::unexpected(PreprocessError{.message = std::move(message), .context = std::move(ctx)});
 }
 
 [[nodiscard]] auto subtract(const Vec3 &a, const Vec3 &b) noexcept -> Vec3
@@ -49,8 +50,8 @@ struct MaterialBinding
         if (name_iter == name_to_group.end())
         {
             return std::unexpected(PreprocessError{
-                std::format("assignment references missing physical group '{}'", assignment.group),
-                {"assignments", std::format("[{}]", i)}});
+                .message = std::format("assignment references missing physical group '{}'", assignment.group),
+                .context = {"assignments", std::format("[{}]", i)}});
         }
         std::size_t material_index{};
         bool        found_material = false;
@@ -66,8 +67,8 @@ struct MaterialBinding
         if (!found_material)
         {
             return std::unexpected(PreprocessError{
-                std::format("assignment references missing material '{}'", assignment.material),
-                {"assignments", std::format("[{}]", i)}});
+                .message = std::format("assignment references missing material '{}'", assignment.material),
+                .context = {"assignments", std::format("[{}]", i)}});
         }
         binding.group_to_material.emplace(name_iter->second, material_index);
     }
@@ -81,11 +82,11 @@ struct MaterialBinding
 
 [[nodiscard]] auto check_duplicate_nodes(const mesh::Mesh &mesh) -> std::expected<void, PreprocessError>
 {
-    constexpr double                                            kEpsilon = 1.0e-12;
+    constexpr double                                            k_epsilon = 1.0e-12;
     std::unordered_map<std::uint64_t, std::vector<std::size_t>> coord_hash_to_indices;
 
     auto hash_coord = [](double x) -> std::uint64_t {
-        const auto scaled = static_cast<std::int64_t>(x / kEpsilon);
+        const auto scaled = static_cast<std::int64_t>(x / k_epsilon);
         return static_cast<std::uint64_t>(scaled);
     };
 
@@ -113,12 +114,13 @@ struct MaterialBinding
                     const auto  dy      = pos_i[1] - pos_j[1];
                     const auto  dz      = pos_i[2] - pos_j[2];
                     const auto  dist_sq = dx * dx + dy * dy + dz * dz;
-                    if (dist_sq < kEpsilon * kEpsilon)
+                    if (dist_sq < k_epsilon * k_epsilon)
                     {
                         return std::unexpected(PreprocessError{
-                            std::format("duplicate nodes detected: node {} and node {} at same position",
-                                        indices[i], indices[j]),
-                            {"mesh", "nodes"}});
+                            .message =
+                                std::format("duplicate nodes detected: node {} and node {} at same position",
+                                            indices[i], indices[j]),
+                            .context = {"mesh", "nodes"}});
                     }
                 }
             }
@@ -163,7 +165,9 @@ struct MaterialBinding
                     const auto &elem_i = mesh.elements[indices[i]];
                     const auto &elem_j = mesh.elements[indices[j]];
                     if (elem_i.geometry != elem_j.geometry)
+                    {
                         continue;
+                    }
 
                     const auto count =
                         static_cast<std::size_t>(elem_i.geometry == ElementGeometry::Tetrahedron4 ? 4U : 8U);
@@ -175,11 +179,11 @@ struct MaterialBinding
                     if (std::equal(sorted_i.begin(), sorted_i.begin() + static_cast<std::ptrdiff_t>(count),
                                    sorted_j.begin()))
                     {
-                        return std::unexpected(
-                            PreprocessError{std::format("duplicate elements detected: element {} and element "
-                                                        "{} have same connectivity",
-                                                        indices[i], indices[j]),
-                                            {"mesh", "elements"}});
+                        return std::unexpected(PreprocessError{
+                            .message = std::format("duplicate elements detected: element {} and element "
+                                                   "{} have same connectivity",
+                                                   indices[i], indices[j]),
+                            .context = {"mesh", "elements"}});
                     }
                 }
             }
@@ -203,11 +207,11 @@ struct MaterialBinding
     for (std::size_t i = 0; i < cfg.dirichlet.size(); ++i)
     {
         const auto &fix = cfg.dirichlet[i];
-        if (name_to_group.find(fix.group) == name_to_group.end())
+        if (!name_to_group.contains(fix.group))
         {
             return std::unexpected(PreprocessError{
-                std::format("dirichlet fix references missing physical group '{}'", fix.group),
-                {"dirichlet", "fixes", std::format("[{}]", i)}});
+                .message = std::format("dirichlet fix references missing physical group '{}'", fix.group),
+                .context = {"dirichlet", "fixes", std::format("[{}]", i)}});
         }
         const auto group_id = name_to_group.at(fix.group);
         const auto surf_it  = mesh.surface_groups.find(group_id);
@@ -219,8 +223,8 @@ struct MaterialBinding
         if (!has_surfaces && !has_nodes)
         {
             return std::unexpected(PreprocessError{
-                std::format("dirichlet group '{}' has no discretized faces or nodes", fix.group),
-                {"dirichlet", "fixes", std::format("[{}]", i)}});
+                .message = std::format("dirichlet group '{}' has no discretized faces or nodes", fix.group),
+                .context = {"dirichlet", "fixes", std::format("[{}]", i)}});
         }
     }
 
@@ -230,16 +234,17 @@ struct MaterialBinding
         const auto  group_iter = name_to_group.find(traction.group);
         if (group_iter == name_to_group.end())
         {
-            return std::unexpected(PreprocessError{
-                std::format("traction load references missing physical group '{}'", traction.group),
-                {"loads", "tractions", std::format("[{}]", i)}});
+            return std::unexpected(
+                PreprocessError{.message = std::format("traction load references missing physical group '{}'",
+                                                       traction.group),
+                                .context = {"loads", "tractions", std::format("[{}]", i)}});
         }
         const auto surf_it = mesh.surface_groups.find(group_iter->second);
         if (surf_it == mesh.surface_groups.end() || surf_it->second.empty())
         {
-            return std::unexpected(
-                PreprocessError{std::format("traction group '{}' has no discretized faces", traction.group),
-                                {"loads", "tractions", std::format("[{}]", i)}});
+            return std::unexpected(PreprocessError{
+                .message = std::format("traction group '{}' has no discretized faces", traction.group),
+                .context = {"loads", "tractions", std::format("[{}]", i)}});
         }
     }
 
@@ -249,16 +254,16 @@ struct MaterialBinding
         const auto  group_iter = name_to_group.find(load.group);
         if (group_iter == name_to_group.end())
         {
-            return std::unexpected(
-                PreprocessError{std::format("point load references missing physical group '{}'", load.group),
-                                {"loads", "points", std::format("[{}]", i)}});
+            return std::unexpected(PreprocessError{
+                .message = std::format("point load references missing physical group '{}'", load.group),
+                .context = {"loads", "points", std::format("[{}]", i)}});
         }
         const auto nodes_it = mesh.node_groups.find(group_iter->second);
         if (nodes_it == mesh.node_groups.end() || nodes_it->second.empty())
         {
-            return std::unexpected(
-                PreprocessError{std::format("point load group '{}' has no tagged nodes", load.group),
-                                {"loads", "points", std::format("[{}]", i)}});
+            return std::unexpected(PreprocessError{
+                .message = std::format("point load group '{}' has no tagged nodes", load.group),
+                .context = {"loads", "points", std::format("[{}]", i)}});
         }
     }
 
@@ -300,10 +305,10 @@ struct MaterialBinding
     -> std::array<Vec3, 8>
 {
     // gauss point location (1/sqrt(3) ≈ 0.577350269189626)
-    constexpr double kGaussCoord = 0.577350269189626;
+    constexpr double k_gauss_coord = std::numbers::inv_sqrt3;
 
     // local node coordinates in natural (xi, eta, zeta) space
-    constexpr std::array<std::array<double, 3>, 8> kLocalCoords = {{
+    constexpr std::array<std::array<double, 3>, 8> k_local_coords = {{
         {-1.0, -1.0, -1.0}, // node 0
         {+1.0, -1.0, -1.0}, // node 1
         {+1.0, +1.0, -1.0}, // node 2
@@ -315,15 +320,15 @@ struct MaterialBinding
     }};
 
     // 8-point Gauss quadrature locations
-    constexpr std::array<std::array<double, 3>, 8> kGaussPoints = {{
-        {-kGaussCoord, -kGaussCoord, -kGaussCoord},
-        {+kGaussCoord, -kGaussCoord, -kGaussCoord},
-        {+kGaussCoord, +kGaussCoord, -kGaussCoord},
-        {-kGaussCoord, +kGaussCoord, -kGaussCoord},
-        {-kGaussCoord, -kGaussCoord, +kGaussCoord},
-        {+kGaussCoord, -kGaussCoord, +kGaussCoord},
-        {+kGaussCoord, +kGaussCoord, +kGaussCoord},
-        {-kGaussCoord, +kGaussCoord, +kGaussCoord},
+    constexpr std::array<std::array<double, 3>, 8> k_gauss_points = {{
+        {-k_gauss_coord, -k_gauss_coord, -k_gauss_coord},
+        {+k_gauss_coord, -k_gauss_coord, -k_gauss_coord},
+        {+k_gauss_coord, +k_gauss_coord, -k_gauss_coord},
+        {-k_gauss_coord, +k_gauss_coord, -k_gauss_coord},
+        {-k_gauss_coord, -k_gauss_coord, +k_gauss_coord},
+        {+k_gauss_coord, -k_gauss_coord, +k_gauss_coord},
+        {+k_gauss_coord, +k_gauss_coord, +k_gauss_coord},
+        {-k_gauss_coord, +k_gauss_coord, +k_gauss_coord},
     }};
 
     std::array<Vec3, 8> grad_sum{};
@@ -331,7 +336,7 @@ struct MaterialBinding
     volume = 0.0;
 
     // integrate over 8 Gauss points (weight = 1.0 each for 2x2x2 quadrature)
-    for (const auto &gp : kGaussPoints)
+    for (const auto &gp : k_gauss_points)
     {
         const double xi   = gp[0];
         const double eta  = gp[1];
@@ -339,16 +344,16 @@ struct MaterialBinding
 
         // compute shape function derivatives in natural coordinates
         // dN_i/d(xi,eta,zeta) = (1/8) * sign_i * (1 +/- eta)(1 +/- zeta), etc.
-        std::array<Vec3, 8> dNdnat{};
+        std::array<Vec3, 8> d_ndnat{};
         for (std::size_t i = 0; i < 8; ++i)
         {
-            const double xi_i   = kLocalCoords[i][0];
-            const double eta_i  = kLocalCoords[i][1];
-            const double zeta_i = kLocalCoords[i][2];
+            const double xi_i   = k_local_coords[i][0];
+            const double eta_i  = k_local_coords[i][1];
+            const double zeta_i = k_local_coords[i][2];
 
-            dNdnat[i][0] = 0.125 * xi_i * (1.0 + eta_i * eta) * (1.0 + zeta_i * zeta);
-            dNdnat[i][1] = 0.125 * (1.0 + xi_i * xi) * eta_i * (1.0 + zeta_i * zeta);
-            dNdnat[i][2] = 0.125 * (1.0 + xi_i * xi) * (1.0 + eta_i * eta) * zeta_i;
+            d_ndnat[i][0] = 0.125 * xi_i * (1.0 + eta_i * eta) * (1.0 + zeta_i * zeta);
+            d_ndnat[i][1] = 0.125 * (1.0 + xi_i * xi) * eta_i * (1.0 + zeta_i * zeta);
+            d_ndnat[i][2] = 0.125 * (1.0 + xi_i * xi) * (1.0 + eta_i * eta) * zeta_i;
         }
 
         // compute Jacobian matrix J = [dx/dxi, dx/deta, dx/dzeta; ...]
@@ -364,7 +369,7 @@ struct MaterialBinding
             {
                 for (std::size_t col = 0; col < 3; ++col)
                 {
-                    jac[row][col] += positions[i][row] * dNdnat[i][col];
+                    jac[row][col] += positions[i][row] * d_ndnat[i][col];
                 }
             }
         }
@@ -392,17 +397,17 @@ struct MaterialBinding
         // transform gradients to physical space: dN/dx = J^-T * dN/dnat
         for (std::size_t i = 0; i < 8; ++i)
         {
-            const double dNdx =
-                jac_inv[0][0] * dNdnat[i][0] + jac_inv[1][0] * dNdnat[i][1] + jac_inv[2][0] * dNdnat[i][2];
-            const double dNdy =
-                jac_inv[0][1] * dNdnat[i][0] + jac_inv[1][1] * dNdnat[i][1] + jac_inv[2][1] * dNdnat[i][2];
-            const double dNdz =
-                jac_inv[0][2] * dNdnat[i][0] + jac_inv[1][2] * dNdnat[i][1] + jac_inv[2][2] * dNdnat[i][2];
+            const double d_ndx =
+                jac_inv[0][0] * d_ndnat[i][0] + jac_inv[1][0] * d_ndnat[i][1] + jac_inv[2][0] * d_ndnat[i][2];
+            const double d_ndy =
+                jac_inv[0][1] * d_ndnat[i][0] + jac_inv[1][1] * d_ndnat[i][1] + jac_inv[2][1] * d_ndnat[i][2];
+            const double d_ndz =
+                jac_inv[0][2] * d_ndnat[i][0] + jac_inv[1][2] * d_ndnat[i][1] + jac_inv[2][2] * d_ndnat[i][2];
 
             // accumulate weighted by det_j (integration weighting)
-            grad_sum[i][0] += dNdx * det_j;
-            grad_sum[i][1] += dNdy * det_j;
-            grad_sum[i][2] += dNdz * det_j;
+            grad_sum[i][0] += d_ndx * det_j;
+            grad_sum[i][1] += d_ndy * det_j;
+            grad_sum[i][2] += d_ndz * det_j;
         }
     }
 
@@ -493,7 +498,7 @@ auto run(const mesh::Mesh &mesh, const config::Config &cfg) -> std::expected<Out
         if (is_tet)
         {
             // tetrahedron: use closed-form gradient calculation
-            std::array<Vec3, 4> tet_pos{positions[0], positions[1], positions[2], positions[3]};
+            std::array<Vec3, 4> const tet_pos{positions[0], positions[1], positions[2], positions[3]};
             const Vec3          e0      = subtract(positions[1], positions[0]);
             const Vec3          e1      = subtract(positions[2], positions[0]);
             const Vec3          e2      = subtract(positions[3], positions[0]);

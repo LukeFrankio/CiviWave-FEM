@@ -24,6 +24,7 @@
 #pragma once
 
 #include <algorithm>
+#include <ranges>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -53,9 +54,9 @@ namespace cwf::mesh::pack
  */
 struct Float3SoA
 {
-    std::vector<float> x; ///< x-components in degrees-of-freedom order
-    std::vector<float> y; ///< y-components in degrees-of-freedom order
-    std::vector<float> z; ///< z-components in degrees-of-freedom order
+    std::vector<float> x; ///< x-components in degrees-of-freedom order // NOLINT(misc-non-private-member-variables-in-classes)
+    std::vector<float> y; ///< y-components in degrees-of-freedom order // NOLINT(misc-non-private-member-variables-in-classes)
+    std::vector<float> z; ///< z-components in degrees-of-freedom order // NOLINT(misc-non-private-member-variables-in-classes)
 
     /**
      * @brief resize all component arrays to the requested count
@@ -83,9 +84,9 @@ struct Float3SoA
      */
     void fill(float value) noexcept
     {
-        std::fill(x.begin(), x.end(), value);
-        std::fill(y.begin(), y.end(), value);
-        std::fill(z.begin(), z.end(), value);
+        std::ranges::fill(x, value);
+        std::ranges::fill(y, value);
+        std::ranges::fill(z, value);
     }
 };
 
@@ -132,7 +133,7 @@ struct SolverBuffers
 {
     std::vector<float>  p;             ///< search direction (FP32)
     std::vector<float>  r;             ///< residual (FP32)
-    std::vector<float>  Ap;            ///< operator application (FP32)
+    std::vector<float>  ap;            ///< operator application (FP32)
     std::vector<float>  z;             ///< preconditioned residual (FP32)
     std::vector<float>  x;             ///< solution accumulator / delta-u (FP32)
     std::vector<double> partials;      ///< FP64 reduction partial sums (per workgroup)

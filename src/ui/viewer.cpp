@@ -116,14 +116,18 @@ struct MeshBuffers
     std::vector<float>                        stress_values;
     std::vector<std::array<std::uint32_t, 2>> edges;          // All edges
     std::vector<std::array<std::uint32_t, 2>> boundary_edges; // Only exterior/boundary edges
-    Vec3 bounds_min{std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
-                    std::numeric_limits<float>::infinity()};
-    Vec3 bounds_max{-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
-                    -std::numeric_limits<float>::infinity()};
-    Vec3 rest_bounds_min{std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(),
-                         std::numeric_limits<float>::infinity()};
-    Vec3 rest_bounds_max{-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
-                         -std::numeric_limits<float>::infinity()};
+    Vec3                                      bounds_min{.x = std::numeric_limits<float>::infinity(),
+                                                         .y = std::numeric_limits<float>::infinity(),
+                                                         .z = std::numeric_limits<float>::infinity()};
+    Vec3                                      bounds_max{.x = -std::numeric_limits<float>::infinity(),
+                                                         .y = -std::numeric_limits<float>::infinity(),
+                                                         .z = -std::numeric_limits<float>::infinity()};
+    Vec3                                      rest_bounds_min{.x = std::numeric_limits<float>::infinity(),
+                                                              .y = std::numeric_limits<float>::infinity(),
+                                                              .z = std::numeric_limits<float>::infinity()};
+    Vec3                                      rest_bounds_max{.x = -std::numeric_limits<float>::infinity(),
+                                                              .y = -std::numeric_limits<float>::infinity(),
+                                                              .z = -std::numeric_limits<float>::infinity()};
     std::vector<Vec4> rest_positions;
     std::vector<Vec4> deformed_positions;
     bool              has_deformation{false};
@@ -143,24 +147,24 @@ struct MeshBuffers
     {
         const float local = t * 2.0F;
         // Blue (0,0,1) -> Green (0,1,0)
-        return Vec3{0.0F, local, 1.0F - local};
+        return Vec3{.x = 0.0F, .y = local, .z = 1.0F - local};
     }
     const float local = (t - 0.5F) * 2.0F;
     // Green (0,1,0) -> Red (1,0,0)
-    return Vec3{local, 1.0F - local, 0.0F};
+    return Vec3{.x = local, .y = 1.0F - local, .z = 0.0F};
 }
 
 [[nodiscard]] auto add(Vec3 a, Vec3 b) noexcept -> Vec3
 {
-    return Vec3{a.x + b.x, a.y + b.y, a.z + b.z};
+    return Vec3{.x = a.x + b.x, .y = a.y + b.y, .z = a.z + b.z};
 }
 [[nodiscard]] auto subtract(Vec3 a, Vec3 b) noexcept -> Vec3
 {
-    return Vec3{a.x - b.x, a.y - b.y, a.z - b.z};
+    return Vec3{.x = a.x - b.x, .y = a.y - b.y, .z = a.z - b.z};
 }
 [[nodiscard]] auto scale(Vec3 v, float s) noexcept -> Vec3
 {
-    return Vec3{v.x * s, v.y * s, v.z * s};
+    return Vec3{.x = v.x * s, .y = v.y * s, .z = v.z * s};
 }
 [[nodiscard]] auto dot(Vec3 a, Vec3 b) noexcept -> float
 {
@@ -168,7 +172,8 @@ struct MeshBuffers
 }
 [[nodiscard]] auto cross(Vec3 a, Vec3 b) noexcept -> Vec3
 {
-    return Vec3{(a.y * b.z) - (a.z * b.y), (a.z * b.x) - (a.x * b.z), (a.x * b.y) - (a.y * b.x)};
+    return Vec3{
+        .x = (a.y * b.z) - (a.z * b.y), .y = (a.z * b.x) - (a.x * b.z), .z = (a.x * b.y) - (a.y * b.x)};
 }
 [[nodiscard]] auto length(Vec3 v) noexcept -> float
 {
@@ -225,7 +230,7 @@ class SimulationBackend : public std::enable_shared_from_this<SimulationBackend>
         backend->pack_             = std::move(packing);
         backend->derived_          = std::move(derived);
         backend->materials_        = std::move(materials);
-        backend->solver_settings_  = solver_settings;
+        backend->solver_settings_  = std::move(solver_settings);
         backend->time_settings_    = time_settings;
         backend->rayleigh_         = rayleigh;
         backend->simulation_time_  = simulation_time;
@@ -318,14 +323,14 @@ class SimulationBackend : public std::enable_shared_from_this<SimulationBackend>
 
     void restore_node_state()
     {
-        const auto copy_vec = [](const mesh::pack::Float3SoA &src, mesh::pack::Float3SoA &dst) {
+        const auto copy_vec = [](const mesh::pack::Float3SoA &src, mesh::pack::Float3SoA &dst) -> void {
             if (src.x.size() != dst.x.size())
             {
                 return;
             }
-            std::copy(src.x.begin(), src.x.end(), dst.x.begin());
-            std::copy(src.y.begin(), src.y.end(), dst.y.begin());
-            std::copy(src.z.begin(), src.z.end(), dst.z.begin());
+            std::ranges::copy(src.x, dst.x.begin());
+            std::ranges::copy(src.y, dst.y.begin());
+            std::ranges::copy(src.z, dst.z.begin());
         };
         copy_vec(baseline_displacement_, pack_.buffers.nodes.displacement);
         copy_vec(baseline_velocity_, pack_.buffers.nodes.velocity);
@@ -338,12 +343,9 @@ class SimulationBackend : public std::enable_shared_from_this<SimulationBackend>
         {
             return;
         }
-        std::copy(baseline_external_force_.x.begin(), baseline_external_force_.x.end(),
-                  pack_.buffers.nodes.external_force.x.begin());
-        std::copy(baseline_external_force_.y.begin(), baseline_external_force_.y.end(),
-                  pack_.buffers.nodes.external_force.y.begin());
-        std::copy(baseline_external_force_.z.begin(), baseline_external_force_.z.end(),
-                  pack_.buffers.nodes.external_force.z.begin());
+        std::ranges::copy(baseline_external_force_.x, pack_.buffers.nodes.external_force.x.begin());
+        std::ranges::copy(baseline_external_force_.y, pack_.buffers.nodes.external_force.y.begin());
+        std::ranges::copy(baseline_external_force_.z, pack_.buffers.nodes.external_force.z.begin());
     }
 
     void apply_custom_load(const StressVectorRequest &request)
@@ -358,7 +360,7 @@ class SimulationBackend : public std::enable_shared_from_this<SimulationBackend>
         const float       len       = length(direction);
         if (len < 1.0e-6F)
         {
-            direction = Vec3{0.0F, 0.0F, -1.0F};
+            direction = Vec3{.x = 0.0F, .y = 0.0F, .z = -1.0F};
         }
         else
         {
@@ -372,7 +374,7 @@ class SimulationBackend : public std::enable_shared_from_this<SimulationBackend>
 
     mesh::pack::PackingResult                          pack_{};
     post::DerivedFieldSet                              derived_{};
-    std::vector<physics::materials::ElasticProperties> materials_{};
+    std::vector<physics::materials::ElasticProperties> materials_;
     config::SolverSettings                             solver_settings_{};
     config::TimeSettings                               time_settings_{};
     physics::materials::RayleighCoefficients           rayleigh_{};
@@ -383,11 +385,11 @@ class SimulationBackend : public std::enable_shared_from_this<SimulationBackend>
     mesh::pack::Float3SoA baseline_acceleration_{};
     mesh::pack::Float3SoA baseline_external_force_{};
 
-    cwf::gpu::VulkanContext                         context_{};
-    cwf::gpu::DeviceBufferArena                     arena_{};
-    std::unique_ptr<cwf::gpu::newmark::Stepper>     stepper_{};
-    std::optional<cwf::gpu::newmark::StepTelemetry> last_telemetry_{};
-    std::filesystem::path                           shader_directory_{};
+    cwf::gpu::VulkanContext                         context_;
+    cwf::gpu::DeviceBufferArena                     arena_;
+    std::unique_ptr<cwf::gpu::newmark::Stepper>     stepper_;
+    std::optional<cwf::gpu::newmark::StepTelemetry> last_telemetry_;
+    std::filesystem::path                           shader_directory_;
 };
 
 struct Mat4
@@ -448,10 +450,10 @@ struct Mat4
     // [ 0        -f        0      0 ]
     // [ 0         0    zf/(zn-zf)  -1 ]
     // [ 0         0  (zn*zf)/(zn-zf) 0 ]
-    const float C = z_far / (z_near - z_far);
-    const float D = (z_near * z_far) / (z_near - z_far);
+    const float c = z_far / (z_near - z_far);
+    const float d = (z_near * z_far) / (z_near - z_far);
     mat.data      = {f / aspect, 0.0F, 0.0F, 0.0F,  0.0F, -f,   0.0F, 0.0F,
-                     0.0F,       0.0F, C,    -1.0F, 0.0F, 0.0F, D,    0.0F};
+                     0.0F,       0.0F, c,    -1.0F, 0.0F, 0.0F, d,    0.0F};
     return mat;
 }
 
@@ -523,11 +525,13 @@ struct CameraInput
         const float vm            = (node < max_nodes) ? derived.nodes[node].von_mises : 0.0F;
         const float normalized_vm = vm * inv_max_vm;
         const Vec3  color         = lerp_color(normalized_vm);
-        const Vec4  rest_pos{rest_x, rest_y, rest_z, 1.0F};
-        const Vec4  def_pos{px, py, pz, 1.0F};
+        const Vec4  rest_pos{.x = rest_x, .y = rest_y, .z = rest_z, .w = 1.0F};
+        const Vec4  def_pos{.x = px, .y = py, .z = pz, .w = 1.0F};
         output.rest_positions[node]     = rest_pos;
         output.deformed_positions[node] = def_pos;
-        output.vertices[node]      = Vertex{def_pos, Vec4{color.x, color.y, color.z, 1.0F}, normalized_vm};
+        output.vertices[node]           = Vertex{.position = def_pos,
+                                                 .color    = Vec4{.x = color.x, .y = color.y, .z = color.z, .w = 1.0F},
+                                                 .stress   = normalized_vm};
         output.stress_values[node] = vm;
         output.bounds_min.x        = std::min(output.bounds_min.x, px);
         output.bounds_min.y        = std::min(output.bounds_min.y, py);
@@ -550,9 +554,9 @@ struct CameraInput
     double total_load_newtons = 0.0;
     for (std::size_t node = 0; node < node_count; ++node)
     {
-        const double fx        = static_cast<double>(packing.buffers.nodes.external_force.x[node]);
-        const double fy        = static_cast<double>(packing.buffers.nodes.external_force.y[node]);
-        const double fz        = static_cast<double>(packing.buffers.nodes.external_force.z[node]);
+        const auto   fx        = static_cast<double>(packing.buffers.nodes.external_force.x[node]);
+        const auto   fy        = static_cast<double>(packing.buffers.nodes.external_force.y[node]);
+        const auto   fz        = static_cast<double>(packing.buffers.nodes.external_force.z[node]);
         const double magnitude = std::sqrt((fx * fx) + (fy * fy) + (fz * fz));
         if (std::isfinite(magnitude))
         {
@@ -564,28 +568,28 @@ struct CameraInput
     // Correct winding for tetrahedrons (all faces pointing outwards)
     // Assuming node 3 is the "peak" and 0-1-2 is the base (CCW from outside)
     // Faces: (0,2,1), (0,1,3), (0,3,2), (1,2,3)
-    constexpr std::array<std::array<std::uint32_t, 3>, 4> kTetFaces = {
+    constexpr std::array<std::array<std::uint32_t, 3>, 4> k_tet_faces = {
         {{0U, 2U, 1U}, {0U, 1U, 3U}, {0U, 3U, 2U}, {1U, 2U, 3U}}};
-    constexpr std::array<std::array<std::uint32_t, 4>, 6> kHexFaces = {{{0U, 1U, 2U, 3U},
-                                                                        {4U, 5U, 6U, 7U},
-                                                                        {0U, 1U, 5U, 4U},
-                                                                        {1U, 2U, 6U, 5U},
-                                                                        {2U, 3U, 7U, 6U},
-                                                                        {3U, 0U, 4U, 7U}}};
-    constexpr std::array<std::array<std::uint32_t, 2>, 6> kTetEdges = {
+    constexpr std::array<std::array<std::uint32_t, 4>, 6> k_hex_faces = {{{0U, 1U, 2U, 3U},
+                                                                          {4U, 5U, 6U, 7U},
+                                                                          {0U, 1U, 5U, 4U},
+                                                                          {1U, 2U, 6U, 5U},
+                                                                          {2U, 3U, 7U, 6U},
+                                                                          {3U, 0U, 4U, 7U}}};
+    constexpr std::array<std::array<std::uint32_t, 2>, 6> k_tet_edges = {
         {{0U, 1U}, {1U, 2U}, {2U, 0U}, {0U, 3U}, {1U, 3U}, {2U, 3U}}};
-    constexpr std::array<std::array<std::uint32_t, 2>, 12> kHexEdges = {{{0U, 1U},
-                                                                         {1U, 2U},
-                                                                         {2U, 3U},
-                                                                         {3U, 0U},
-                                                                         {4U, 5U},
-                                                                         {5U, 6U},
-                                                                         {6U, 7U},
-                                                                         {7U, 4U},
-                                                                         {0U, 4U},
-                                                                         {1U, 5U},
-                                                                         {2U, 6U},
-                                                                         {3U, 7U}}};
+    constexpr std::array<std::array<std::uint32_t, 2>, 12> k_hex_edges = {{{0U, 1U},
+                                                                           {1U, 2U},
+                                                                           {2U, 3U},
+                                                                           {3U, 0U},
+                                                                           {4U, 5U},
+                                                                           {5U, 6U},
+                                                                           {6U, 7U},
+                                                                           {7U, 4U},
+                                                                           {0U, 4U},
+                                                                           {1U, 5U},
+                                                                           {2U, 6U},
+                                                                           {3U, 7U}}};
 
     // Track face occurrences to identify boundary faces (faces shared by only 1 element are boundaries)
     // Face key: sorted triplet of node indices
@@ -593,11 +597,17 @@ struct CameraInput
     const auto make_face_key = [](std::uint32_t a, std::uint32_t b, std::uint32_t c) -> std::uint64_t {
         // Sort the three indices to get a canonical key
         if (a > b)
+        {
             std::swap(a, b);
+        }
         if (b > c)
+        {
             std::swap(b, c);
+        }
         if (a > b)
+        {
             std::swap(a, b);
+        }
         return (static_cast<std::uint64_t>(a) << 42U) | (static_cast<std::uint64_t>(b) << 21U) |
                static_cast<std::uint64_t>(c);
     };
@@ -607,7 +617,7 @@ struct CameraInput
     {
         if (element.geometry == mesh::ElementGeometry::Tetrahedron4)
         {
-            for (const auto &face : kTetFaces)
+            for (const auto &face : k_tet_faces)
             {
                 auto key =
                     make_face_key(element.nodes[face[0]], element.nodes[face[1]], element.nodes[face[2]]);
@@ -616,7 +626,7 @@ struct CameraInput
         }
         else
         {
-            for (const auto &face : kHexFaces)
+            for (const auto &face : k_hex_faces)
             {
                 // Hex faces are quads, split into two triangles for counting
                 auto key1 =
@@ -629,9 +639,9 @@ struct CameraInput
         }
     }
 
-    const auto emit = [&](std::uint32_t a, std::uint32_t b, std::uint32_t c) {
-        constexpr auto kInvalid = std::numeric_limits<std::uint32_t>::max();
-        if (a == kInvalid || b == kInvalid || c == kInvalid)
+    const auto emit = [&](std::uint32_t a, std::uint32_t b, std::uint32_t c) -> void {
+        constexpr auto k_invalid = std::numeric_limits<std::uint32_t>::max();
+        if (a == k_invalid || b == k_invalid || c == k_invalid)
         {
             return;
         }
@@ -657,13 +667,15 @@ struct CameraInput
 
     const auto make_edge_key = [](std::uint32_t a, std::uint32_t b) -> std::uint64_t {
         if (a > b)
+        {
             std::swap(a, b);
+        }
         return (static_cast<std::uint64_t>(a) << 32U) | static_cast<std::uint64_t>(b);
     };
 
-    const auto add_edge = [&](std::uint32_t a, std::uint32_t b) {
-        constexpr auto kInvalid = std::numeric_limits<std::uint32_t>::max();
-        if (a == kInvalid || b == kInvalid)
+    const auto add_edge = [&](std::uint32_t a, std::uint32_t b) -> void {
+        constexpr auto k_invalid = std::numeric_limits<std::uint32_t>::max();
+        if (a == k_invalid || b == k_invalid)
         {
             return;
         }
@@ -683,7 +695,7 @@ struct CameraInput
     };
 
     // Count how many boundary faces each edge belongs to
-    const auto count_edge_boundary_faces = [&](std::uint32_t a, std::uint32_t b, std::uint32_t c) {
+    const auto count_edge_boundary_faces = [&](std::uint32_t a, std::uint32_t b, std::uint32_t c) -> void {
         auto face_key = make_face_key(a, b, c);
         if (face_counts[face_key] == 1U) // Boundary face
         {
@@ -697,20 +709,20 @@ struct CameraInput
     {
         if (element.geometry == mesh::ElementGeometry::Tetrahedron4)
         {
-            for (const auto &face : kTetFaces)
+            for (const auto &face : k_tet_faces)
             {
                 emit(element.nodes[face[0]], element.nodes[face[1]], element.nodes[face[2]]);
                 count_edge_boundary_faces(element.nodes[face[0]], element.nodes[face[1]],
                                           element.nodes[face[2]]);
             }
-            for (const auto &edge : kTetEdges)
+            for (const auto &edge : k_tet_edges)
             {
                 add_edge(element.nodes[edge[0]], element.nodes[edge[1]]);
             }
         }
         else
         {
-            for (const auto &face : kHexFaces)
+            for (const auto &face : k_hex_faces)
             {
                 emit(element.nodes[face[0]], element.nodes[face[1]], element.nodes[face[2]]);
                 emit(element.nodes[face[0]], element.nodes[face[2]], element.nodes[face[3]]);
@@ -719,7 +731,7 @@ struct CameraInput
                 count_edge_boundary_faces(element.nodes[face[0]], element.nodes[face[2]],
                                           element.nodes[face[3]]);
             }
-            for (const auto &edge : kHexEdges)
+            for (const auto &edge : k_hex_edges)
             {
                 add_edge(element.nodes[edge[0]], element.nodes[edge[1]]);
             }
@@ -743,13 +755,13 @@ struct CameraInput
 
     if (!std::isfinite(output.bounds_min.x))
     {
-        output.bounds_min = Vec3{-1.0F, -1.0F, -1.0F};
-        output.bounds_max = Vec3{1.0F, 1.0F, 1.0F};
+        output.bounds_min = Vec3{.x = -1.0F, .y = -1.0F, .z = -1.0F};
+        output.bounds_max = Vec3{.x = 1.0F, .y = 1.0F, .z = 1.0F};
     }
     if (!std::isfinite(output.rest_bounds_min.x))
     {
-        output.rest_bounds_min = Vec3{-1.0F, -1.0F, -1.0F};
-        output.rest_bounds_max = Vec3{1.0F, 1.0F, 1.0F};
+        output.rest_bounds_min = Vec3{.x = -1.0F, .y = -1.0F, .z = -1.0F};
+        output.rest_bounds_max = Vec3{.x = 1.0F, .y = 1.0F, .z = 1.0F};
     }
 
     log_viewer("built mesh buffers: {} vertices, {} indices, bounds min ({:.3f}, {:.3f}, {:.3f}) max "
@@ -784,9 +796,9 @@ struct CameraInput
 {
     CameraState camera{};
     const Vec3  size = subtract(mesh.bounds_max, mesh.bounds_min);
-    const Vec3  focus{lerp(mesh.bounds_min.x, mesh.bounds_max.x, 0.5F),
-                     lerp(mesh.bounds_min.y, mesh.bounds_max.y, 0.5F),
-                     lerp(mesh.bounds_min.z, mesh.bounds_max.z, 0.5F)};
+    const Vec3  focus{.x = lerp(mesh.bounds_min.x, mesh.bounds_max.x, 0.5F),
+                      .y = lerp(mesh.bounds_min.y, mesh.bounds_max.y, 0.5F),
+                      .z = lerp(mesh.bounds_min.z, mesh.bounds_max.z, 0.5F)};
     const float radius  = std::max(length(size) * 0.5F, 0.5F);
     camera.focus        = focus;
     camera.distance     = std::max(radius * 2.5F, 1.0F);
@@ -806,7 +818,7 @@ struct GlfwContext
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
         window = glfwCreateWindow(1280, 800, "CiviWave FEM", nullptr, nullptr);
-        if (!window)
+        if (window == nullptr)
         {
             glfwTerminate();
             throw std::runtime_error("failed to create GLFW window");
@@ -815,7 +827,7 @@ struct GlfwContext
 
     ~GlfwContext()
     {
-        if (window)
+        if (window != nullptr)
         {
             glfwDestroyWindow(window);
             window = nullptr;
@@ -895,9 +907,9 @@ class VulkanViewer
     [[nodiscard]] auto query_swapchain_support(VkPhysicalDevice device) const -> SwapchainSupportDetails;
     [[nodiscard]] auto find_queue_families(VkPhysicalDevice device) const -> QueueFamilyIndices;
     [[nodiscard]] auto check_device_suitability(VkPhysicalDevice device) const -> bool;
-    [[nodiscard]] auto choose_surface_format(const std::vector<VkSurfaceFormatKHR> &formats) const
+    [[nodiscard]] static auto choose_surface_format(const std::vector<VkSurfaceFormatKHR> &formats)
         -> VkSurfaceFormatKHR;
-    [[nodiscard]] auto choose_present_mode(const std::vector<VkPresentModeKHR> &modes) const
+    [[nodiscard]] static auto choose_present_mode(const std::vector<VkPresentModeKHR> &modes)
         -> VkPresentModeKHR;
     [[nodiscard]] auto choose_swap_extent(const VkSurfaceCapabilitiesKHR &capabilities) const -> VkExtent2D;
     [[nodiscard]] auto find_memory_type(std::uint32_t type_filter, VkMemoryPropertyFlags properties) const
@@ -910,7 +922,7 @@ class VulkanViewer
     void               update_window_title(double fps);
     void               init_imgui();
     void               shutdown_imgui();
-    void               begin_imgui_frame();
+    static void        begin_imgui_frame();
     void               build_ui();
     void               reset_camera();
     void               upload_vertex_buffer();
@@ -936,7 +948,6 @@ class VulkanViewer
     static void framebuffer_resize_callback(GLFWwindow *window, int width, int height);
     static void scroll_callback(GLFWwindow *window, double /*xoffset*/, double yoffset);
 
-  private:
     [[nodiscard]] auto stress_direction() const noexcept -> Vec3;
     [[nodiscard]] auto get_vertex_position(std::size_t index) const -> Vec3;
     [[nodiscard]] auto project_position(const Vec4 &position) const -> std::optional<ImVec2>;
@@ -949,10 +960,10 @@ class VulkanViewer
     CameraInput                                     camera_input_{};
     double                                          simulation_time_{0.0};
     const mesh::Mesh                               *source_mesh_{nullptr};
-    std::shared_ptr<SimulationBackend>              backend_{};
+    std::shared_ptr<SimulationBackend>              backend_;
     bool                                            pending_solver_update_{false};
-    std::optional<ViewerError>                      backend_error_{};
-    std::optional<cwf::gpu::newmark::StepTelemetry> backend_telemetry_{};
+    std::optional<ViewerError>                      backend_error_;
+    std::optional<cwf::gpu::newmark::StepTelemetry> backend_telemetry_;
 
     VkInstance                 instance_{VK_NULL_HANDLE};
     VkDebugUtilsMessengerEXT   debug_messenger_{VK_NULL_HANDLE};
@@ -965,14 +976,14 @@ class VulkanViewer
     VkSwapchainKHR             swapchain_{VK_NULL_HANDLE};
     VkFormat                   swapchain_image_format_{};
     VkExtent2D                 swapchain_extent_{};
-    std::vector<VkImage>       swapchain_images_{};
-    std::vector<VkImageView>   swapchain_image_views_{};
+    std::vector<VkImage>       swapchain_images_;
+    std::vector<VkImageView>   swapchain_image_views_;
     VkRenderPass               render_pass_{VK_NULL_HANDLE};
     VkDescriptorSetLayout      descriptor_set_layout_{VK_NULL_HANDLE};
     VkPipelineLayout           pipeline_layout_{VK_NULL_HANDLE};
     VkPipeline                 pipeline_{VK_NULL_HANDLE};
     VkCommandPool              command_pool_{VK_NULL_HANDLE};
-    std::vector<VkFramebuffer> framebuffers_{};
+    std::vector<VkFramebuffer> framebuffers_;
     VkImage                    depth_image_{VK_NULL_HANDLE};
     VkDeviceMemory             depth_memory_{VK_NULL_HANDLE};
     VkImageView                depth_image_view_{VK_NULL_HANDLE};
@@ -993,12 +1004,12 @@ class VulkanViewer
         VkFence         in_flight{VK_NULL_HANDLE};
     };
 
-    std::vector<FrameResources>  frames_{};
+    std::vector<FrameResources>  frames_;
     VkDescriptorPool             descriptor_pool_{VK_NULL_HANDLE};
-    std::vector<VkDescriptorSet> descriptor_sets_{};
+    std::vector<VkDescriptorSet> descriptor_sets_;
     std::size_t                  current_frame_{0};
     bool                         framebuffer_resized_{false};
-    std::filesystem::path        shader_directory_{};
+    std::filesystem::path        shader_directory_;
     VkDescriptorPool             imgui_descriptor_pool_{VK_NULL_HANDLE};
     bool                         imgui_initialized_{false};
     std::uint32_t                min_image_count_{0U};
@@ -1008,7 +1019,7 @@ class VulkanViewer
     bool                         debug_wireframe_{false};
     bool                         debug_disable_depth_{false};
     bool                         deformation_enabled_{true};
-    std::vector<Vec3>            deformation_offsets_{};
+    std::vector<Vec3>            deformation_offsets_;
     float                        deformation_scale_{1.0F};
     float                        current_deformation_weight_{1.0F};
     float                        max_deformation_offset_{0.0F};
@@ -1036,14 +1047,14 @@ class VulkanViewer
     };
 
     StressVectorState          stress_state_{};
-    std::vector<float>         base_stress_{};
-    std::vector<float>         display_stress_{};
+    std::vector<float>         base_stress_;
+    std::vector<float>         display_stress_;
     float                      base_stress_min_{0.0F};
     float                      base_stress_max_{1.0F};
     float                      base_stress_reference_range_{1.0F};
-    std::optional<std::size_t> hovered_vertex_{};
-    std::vector<ImVec2>        projected_vertices_{};
-    std::vector<bool>          projected_visible_{};
+    std::optional<std::size_t> hovered_vertex_;
+    std::vector<ImVec2>        projected_vertices_;
+    std::vector<bool>          projected_visible_;
     float                      edge_outline_thickness_{1.5F};
     float                      vertex_outline_thickness_{1.5F};
     float                      vertex_marker_radius_{5.0F};
@@ -1055,19 +1066,19 @@ class VulkanViewer
     bool                       show_hover_labels_{true};
     bool                       require_ctrl_for_selection_{true};
     bool                       selection_in_progress_{false};
-    std::vector<Vec3>          interactive_offsets_{};
+    std::vector<Vec3>          interactive_offsets_;
     float                      interactive_deformation_gain_{0.05F};
 
     // Mesh selector state
-    std::filesystem::path                config_directory_{};
-    std::vector<std::string>             available_configs_{};
+    std::filesystem::path                config_directory_;
+    std::vector<std::string>             available_configs_;
     int                                  selected_config_index_{0};
-    std::optional<std::filesystem::path> restart_requested_config_{};
+    std::optional<std::filesystem::path> restart_requested_config_;
     bool                                 configs_scanned_{false};
 
     // Owned mesh for hot-reload (when we load the mesh ourselves)
-    std::optional<mesh::Mesh> owned_mesh_{};
-    std::string               reload_status_message_{};
+    std::optional<mesh::Mesh> owned_mesh_;
+    std::string               reload_status_message_;
     bool                      reload_in_progress_{false};
 
     /**
@@ -1098,13 +1109,14 @@ class VulkanViewer
         }
 
         // 2. Standard relative paths from various working directories
-        search_paths.push_back(std::filesystem::path{"tests/data"});
+        search_paths.emplace_back("tests/data");
         search_paths.push_back(std::filesystem::current_path() / "tests" / "data");
 
         // 3. Try to find based on executable location
         // Go up from build directory to project root
+        // e.g. build/Release/bin -> build/Release -> build -> project_root
         auto exe_dir = std::filesystem::current_path();
-        for (int i = 0; i < 3; ++i) // Try up to 3 levels up
+        for (int i = 0; i < 5; ++i) // Try up to 5 levels up (handles deep build dirs)
         {
             auto candidate = exe_dir / "tests" / "data";
             if (std::filesystem::exists(candidate))
@@ -1424,9 +1436,9 @@ class VulkanViewer
      */
     void fit_camera_to_mesh()
     {
-        const Vec3  center{(mesh_.bounds_min.x + mesh_.bounds_max.x) * 0.5F,
-                          (mesh_.bounds_min.y + mesh_.bounds_max.y) * 0.5F,
-                          (mesh_.bounds_min.z + mesh_.bounds_max.z) * 0.5F};
+        const Vec3  center{.x = (mesh_.bounds_min.x + mesh_.bounds_max.x) * 0.5F,
+                           .y = (mesh_.bounds_min.y + mesh_.bounds_max.y) * 0.5F,
+                           .z = (mesh_.bounds_min.z + mesh_.bounds_max.z) * 0.5F};
         const Vec3  extent     = subtract(mesh_.bounds_max, mesh_.bounds_min);
         const float max_extent = std::max({extent.x, extent.y, extent.z});
         const float distance   = max_extent * 2.5F;
@@ -1456,7 +1468,7 @@ const std::vector<const char *> kDeviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_
     vkEnumerateInstanceLayerProperties(&layer_count, layers.data());
     for (const auto *layer_name : kValidationLayers)
     {
-        const bool found = std::ranges::any_of(layers, [layer_name](const VkLayerProperties &props) {
+        const bool found = std::ranges::any_of(layers, [layer_name](const VkLayerProperties &props) -> bool {
             return std::string_view{props.layerName} == layer_name;
         });
         if (!found)
@@ -1479,7 +1491,7 @@ VulkanViewer::VulkanViewer(GLFWwindow *window, const mesh::Mesh &source_mesh, Me
     {
         throw std::runtime_error("shader directory missing: " + shader_directory_.string());
     }
-    if (!window_)
+    if (window_ == nullptr)
     {
         throw std::runtime_error("GLFW window is null");
     }
@@ -1515,86 +1527,86 @@ VulkanViewer::~VulkanViewer()
 
     for (auto &frame : frames_)
     {
-        if (frame.uniform_buffer)
+        if (frame.uniform_buffer != nullptr)
         {
             vkDestroyBuffer(device_, frame.uniform_buffer, nullptr);
         }
-        if (frame.uniform_memory)
+        if (frame.uniform_memory != nullptr)
         {
             vkFreeMemory(device_, frame.uniform_memory, nullptr);
         }
-        if (frame.image_available)
+        if (frame.image_available != nullptr)
         {
             vkDestroySemaphore(device_, frame.image_available, nullptr);
         }
-        if (frame.render_finished)
+        if (frame.render_finished != nullptr)
         {
             vkDestroySemaphore(device_, frame.render_finished, nullptr);
         }
-        if (frame.in_flight)
+        if (frame.in_flight != nullptr)
         {
             vkDestroyFence(device_, frame.in_flight, nullptr);
         }
     }
 
-    if (descriptor_pool_)
+    if (descriptor_pool_ != nullptr)
     {
         vkDestroyDescriptorPool(device_, descriptor_pool_, nullptr);
     }
-    if (descriptor_set_layout_)
+    if (descriptor_set_layout_ != nullptr)
     {
         vkDestroyDescriptorSetLayout(device_, descriptor_set_layout_, nullptr);
     }
-    if (pipeline_)
+    if (pipeline_ != nullptr)
     {
         vkDestroyPipeline(device_, pipeline_, nullptr);
     }
-    if (pipeline_layout_)
+    if (pipeline_layout_ != nullptr)
     {
         vkDestroyPipelineLayout(device_, pipeline_layout_, nullptr);
     }
-    if (render_pass_)
+    if (render_pass_ != nullptr)
     {
         vkDestroyRenderPass(device_, render_pass_, nullptr);
     }
-    if (command_pool_)
+    if (command_pool_ != nullptr)
     {
         vkDestroyCommandPool(device_, command_pool_, nullptr);
     }
-    if (vertex_buffer_)
+    if (vertex_buffer_ != nullptr)
     {
         vkDestroyBuffer(device_, vertex_buffer_, nullptr);
     }
-    if (vertex_memory_)
+    if (vertex_memory_ != nullptr)
     {
         vkFreeMemory(device_, vertex_memory_, nullptr);
     }
-    if (index_buffer_)
+    if (index_buffer_ != nullptr)
     {
         vkDestroyBuffer(device_, index_buffer_, nullptr);
     }
-    if (index_memory_)
+    if (index_memory_ != nullptr)
     {
         vkFreeMemory(device_, index_memory_, nullptr);
     }
-    if (device_)
+    if (device_ != nullptr)
     {
         vkDestroyDevice(device_, nullptr);
     }
-    if (surface_)
+    if (surface_ != nullptr)
     {
         vkDestroySurfaceKHR(instance_, surface_, nullptr);
     }
-    if (debug_messenger_)
+    if (debug_messenger_ != nullptr)
     {
         const auto destroy = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
             vkGetInstanceProcAddr(instance_, "vkDestroyDebugUtilsMessengerEXT"));
-        if (destroy)
+        if (destroy != nullptr)
         {
             destroy(instance_, debug_messenger_, nullptr);
         }
     }
-    if (instance_)
+    if (instance_ != nullptr)
     {
         vkDestroyInstance(instance_, nullptr);
     }
@@ -1604,7 +1616,7 @@ void VulkanViewer::run()
 {
     auto last_time   = std::chrono::high_resolution_clock::now();
     int  frame_count = 0;
-    while (!glfwWindowShouldClose(window_))
+    while (glfwWindowShouldClose(window_) == 0)
     {
         glfwPollEvents();
         if (glfwGetKey(window_, GLFW_KEY_ESCAPE) == GLFW_PRESS)
@@ -1715,7 +1727,7 @@ void VulkanViewer::create_instance()
            const VkDebugUtilsMessengerCallbackDataEXT *callback, void *) -> VkBool32 {
         if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
         {
-            std::fprintf(stderr, "[vulkan] %s\n", callback->pMessage);
+            std::println(stderr, "[vulkan] {}", callback->pMessage);
         }
         return VK_FALSE;
     };
@@ -1743,14 +1755,15 @@ void VulkanViewer::setup_debug_messenger()
            const VkDebugUtilsMessengerCallbackDataEXT *callback, void *) -> VkBool32 {
         if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
         {
-            std::fprintf(stderr, "[vulkan] %s\n", callback->pMessage);
+            std::println(stderr, "[vulkan] {}", callback->pMessage);
         }
         return VK_FALSE;
     };
 
     const auto create_fn = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
         vkGetInstanceProcAddr(instance_, "vkCreateDebugUtilsMessengerEXT"));
-    if (!create_fn || create_fn(instance_, &create_info, nullptr, &debug_messenger_) != VK_SUCCESS)
+    if ((create_fn == nullptr) ||
+        create_fn(instance_, &create_info, nullptr, &debug_messenger_) != VK_SUCCESS)
     {
         throw std::runtime_error("failed to create debug messenger");
     }
@@ -1824,9 +1837,10 @@ auto VulkanViewer::check_device_suitability(VkPhysicalDevice device) const -> bo
     vkEnumerateDeviceExtensionProperties(device, nullptr, &ext_count, available.data());
     for (const auto *required : kDeviceExtensions)
     {
-        const bool found = std::ranges::any_of(available, [required](const VkExtensionProperties &ext) {
-            return std::string_view{ext.extensionName} == required;
-        });
+        const bool found =
+            std::ranges::any_of(available, [required](const VkExtensionProperties &ext) -> bool {
+                return std::string_view{ext.extensionName} == required;
+            });
         if (!found)
         {
             return false;
@@ -1849,7 +1863,7 @@ void VulkanViewer::pick_physical_device()
     std::vector<VkPhysicalDevice> devices(device_count);
     vkEnumeratePhysicalDevices(instance_, &device_count, devices.data());
 
-    for (const auto device : devices)
+    for (auto *const device : devices)
     {
         if (check_device_suitability(device))
         {
@@ -1914,8 +1928,7 @@ void VulkanViewer::create_logical_device()
     log_viewer("create_logical_device: device ready");
 }
 
-auto VulkanViewer::choose_surface_format(const std::vector<VkSurfaceFormatKHR> &formats) const
-    -> VkSurfaceFormatKHR
+auto VulkanViewer::choose_surface_format(const std::vector<VkSurfaceFormatKHR> &formats) -> VkSurfaceFormatKHR
 {
     for (const auto &fmt : formats)
     {
@@ -1927,7 +1940,7 @@ auto VulkanViewer::choose_surface_format(const std::vector<VkSurfaceFormatKHR> &
     return formats.front();
 }
 
-auto VulkanViewer::choose_present_mode(const std::vector<VkPresentModeKHR> &modes) const -> VkPresentModeKHR
+auto VulkanViewer::choose_present_mode(const std::vector<VkPresentModeKHR> &modes) -> VkPresentModeKHR
 {
     for (const auto mode : modes)
     {
@@ -2263,7 +2276,8 @@ auto VulkanViewer::find_memory_type(std::uint32_t type_filter, VkMemoryPropertyF
     vkGetPhysicalDeviceMemoryProperties(physical_device_, &mem);
     for (std::uint32_t i = 0; i < mem.memoryTypeCount; ++i)
     {
-        if ((type_filter & (1U << i)) && (mem.memoryTypes[i].propertyFlags & properties) == properties)
+        if (((type_filter & (1U << i)) != 0u) &&
+            (mem.memoryTypes[i].propertyFlags & properties) == properties)
         {
             return i;
         }
@@ -2584,17 +2598,17 @@ void VulkanViewer::cleanup_swapchain()
         vkDestroyFramebuffer(device_, framebuffer, nullptr);
     }
     framebuffers_.clear();
-    if (depth_image_view_)
+    if (depth_image_view_ != nullptr)
     {
         vkDestroyImageView(device_, depth_image_view_, nullptr);
         depth_image_view_ = VK_NULL_HANDLE;
     }
-    if (depth_image_)
+    if (depth_image_ != nullptr)
     {
         vkDestroyImage(device_, depth_image_, nullptr);
         depth_image_ = VK_NULL_HANDLE;
     }
-    if (depth_memory_)
+    if (depth_memory_ != nullptr)
     {
         vkFreeMemory(device_, depth_memory_, nullptr);
         depth_memory_ = VK_NULL_HANDLE;
@@ -2604,7 +2618,7 @@ void VulkanViewer::cleanup_swapchain()
         vkDestroyImageView(device_, view, nullptr);
     }
     swapchain_image_views_.clear();
-    if (swapchain_)
+    if (swapchain_ != nullptr)
     {
         vkDestroySwapchainKHR(device_, swapchain_, nullptr);
         swapchain_ = VK_NULL_HANDLE;
@@ -2654,7 +2668,7 @@ void VulkanViewer::draw_frame(ImDrawData *draw_data)
         recreate_swapchain();
         return;
     }
-    else if (acquire != VK_SUCCESS && acquire != VK_SUBOPTIMAL_KHR)
+    if (acquire != VK_SUCCESS && acquire != VK_SUBOPTIMAL_KHR)
     {
         log_viewer("draw_frame: vkAcquireNextImageKHR returned {}", static_cast<int>(acquire));
     }
@@ -2664,9 +2678,9 @@ void VulkanViewer::draw_frame(ImDrawData *draw_data)
     update_uniform_buffer(static_cast<std::uint32_t>(current_frame_));
     record_command_buffer(frame.command_buffer, image_index, draw_data);
 
-    VkSemaphore          wait_semaphores[]   = {frame.image_available};
+    VkSemaphore const    wait_semaphores[]   = {frame.image_available};
     VkPipelineStageFlags wait_stages[]       = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-    VkSemaphore          signal_semaphores[] = {frame.render_finished};
+    VkSemaphore const    signal_semaphores[] = {frame.render_finished};
 
     VkSubmitInfo submit{};
     submit.sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -2741,19 +2755,19 @@ void VulkanViewer::record_command_buffer(VkCommandBuffer command_buffer, std::ui
     viewport.minDepth = 0.0F;
     viewport.maxDepth = 1.0F;
 
-    VkRect2D scissor{VkOffset2D{0, 0}, swapchain_extent_};
+    VkRect2D const scissor{VkOffset2D{0, 0}, swapchain_extent_};
     vkCmdSetViewport(command_buffer, 0U, 1U, &viewport);
     vkCmdSetScissor(command_buffer, 0U, 1U, &scissor);
 
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
 
-    VkBuffer     vertex_buffers[] = {vertex_buffer_};
+    VkBuffer const vertex_buffers[] = {vertex_buffer_};
     VkDeviceSize offsets[]        = {0U};
-    if (vertex_buffer_)
+    if (vertex_buffer_ != nullptr)
     {
         vkCmdBindVertexBuffers(command_buffer, 0U, 1U, vertex_buffers, offsets);
     }
-    if (index_buffer_)
+    if (index_buffer_ != nullptr)
     {
         vkCmdBindIndexBuffer(command_buffer, index_buffer_, 0U, VK_INDEX_TYPE_UINT32);
     }
@@ -2779,7 +2793,7 @@ void VulkanViewer::record_command_buffer(VkCommandBuffer command_buffer, std::ui
         vkCmdDraw(command_buffer, static_cast<std::uint32_t>(mesh_.vertices.size()), 1U, 0U, 0U);
     }
 
-    if (imgui_initialized_ && draw_data)
+    if (imgui_initialized_ && (draw_data != nullptr))
     {
         ImGui_ImplVulkan_RenderDrawData(draw_data, command_buffer);
     }
@@ -2941,7 +2955,7 @@ void VulkanViewer::shutdown_imgui()
 
     if (!imgui_initialized_)
     {
-        if (imgui_descriptor_pool_)
+        if (imgui_descriptor_pool_ != nullptr)
         {
             vkDestroyDescriptorPool(device_, imgui_descriptor_pool_, nullptr);
             imgui_descriptor_pool_ = VK_NULL_HANDLE;
@@ -2956,7 +2970,7 @@ void VulkanViewer::shutdown_imgui()
     imgui_initialized_ = false;
     log_viewer("shutdown_imgui: destroyed ImGui context");
 
-    if (imgui_descriptor_pool_)
+    if (imgui_descriptor_pool_ != nullptr)
     {
         vkDestroyDescriptorPool(device_, imgui_descriptor_pool_, nullptr);
         imgui_descriptor_pool_ = VK_NULL_HANDLE;
@@ -2998,7 +3012,7 @@ void VulkanViewer::build_ui()
         if (!available_configs_.empty())
         {
             // Clamp index to valid range
-            if (selected_config_index_ >= static_cast<int>(available_configs_.size()))
+            if (std::cmp_greater_equal(selected_config_index_, available_configs_.size()))
             {
                 selected_config_index_ = 0;
             }
@@ -3009,7 +3023,7 @@ void VulkanViewer::build_ui()
             ImGui::SetNextItemWidth(200.0F);
             if (ImGui::BeginCombo("##MeshConfig", current_display.c_str()))
             {
-                for (int i = 0; i < static_cast<int>(available_configs_.size()); ++i)
+                for (int i = 0; std::cmp_less(i, available_configs_.size()); ++i)
                 {
                     const bool        is_selected = (selected_config_index_ == i);
                     const std::string display =
@@ -3088,7 +3102,7 @@ void VulkanViewer::build_ui()
         // Mesh Settings collapsible section
         if (ImGui::CollapsingHeader("Mesh Settings"))
         {
-            if (source_mesh_)
+            if (source_mesh_ != nullptr)
             {
                 ImGui::Text("Nodes: %zu", source_mesh_->nodes.size());
                 ImGui::Text("Elements: %zu", source_mesh_->elements.size());
@@ -3239,7 +3253,7 @@ void VulkanViewer::build_ui()
         ImGui::Separator();
         if (ImGui::CollapsingHeader("Stress Vector Controls", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            const auto refresh_interactive_effects = [this]() {
+            const auto refresh_interactive_effects = [this]() -> void {
                 recompute_interactive_offsets();
                 const float active_weight = deformation_enabled_ ? active_deformation_weight() : 0.0F;
                 apply_deformation_scale(active_weight);
@@ -3261,13 +3275,13 @@ void VulkanViewer::build_ui()
             {
                 // no-op, draw flag toggled via checkbox
             }
-            const auto sanitize_positive = [](float value, float fallback) {
-                constexpr float kUpper = std::numeric_limits<float>::max() * 0.25F;
+            const auto sanitize_positive = [](float value, float fallback) -> float {
+                constexpr float k_upper = std::numeric_limits<float>::max() * 0.25F;
                 if (!std::isfinite(value) || value <= 0.0F)
                 {
                     return fallback;
                 }
-                return std::min(value, kUpper);
+                return std::min(value, k_upper);
             };
             float load_slider = std::max(current_load_newtons_, 1.0e-6F);
             float slider_min  = sanitize_positive(base_load_reference_newtons_ * 1.0e-3F, 1.0e-6F);
@@ -3354,7 +3368,7 @@ void VulkanViewer::reset_camera()
  */
 void VulkanViewer::upload_vertex_buffer()
 {
-    if (!device_ || !vertex_buffer_ || !vertex_memory_)
+    if ((device_ == nullptr) || (vertex_buffer_ == nullptr) || (vertex_memory_ == nullptr))
     {
         return;
     }
@@ -3406,13 +3420,15 @@ void VulkanViewer::refresh_camera_matrices()
     const float sin_p = std::sin(camera_.pitch);
     const float cos_y = std::cos(camera_.yaw);
     const float sin_y = std::sin(camera_.yaw);
-    Vec3 offset{camera_.distance * cos_p * cos_y, camera_.distance * sin_p, camera_.distance * cos_p * sin_y};
+    Vec3 const  offset{.x = camera_.distance * cos_p * cos_y,
+                       .y = camera_.distance * sin_p,
+                       .z = camera_.distance * cos_p * sin_y};
     const Vec3 eye = add(focus, offset);
-    const Vec3 up{0.0F, 1.0F, 0.0F};
+    const Vec3  up{.x = 0.0F, .y = 1.0F, .z = 0.0F};
 
     current_view_matrix_   = make_look_at(eye, focus, up);
-    const float width      = static_cast<float>(std::max(1U, swapchain_extent_.width));
-    const float height     = static_cast<float>(std::max(1U, swapchain_extent_.height));
+    const auto width       = static_cast<float>(std::max(1U, swapchain_extent_.width));
+    const auto height      = static_cast<float>(std::max(1U, swapchain_extent_.height));
     current_proj_matrix_   = make_perspective(60.0F * (kPiF / 180.0F), width / height, 0.01F, 5000.0F);
     current_view_proj_     = multiply(current_view_matrix_, current_proj_matrix_);
     current_view_proj_cpu_ = transpose(current_view_proj_);
@@ -3612,7 +3628,7 @@ void VulkanViewer::render_overlays()
         const Vec3   dir           = stress_direction();
         const float  arrow_extent  = std::max(0.0F, stress_state_.magnitude) * stress_state_.arrow_length;
         const Vec3   tip_world     = add(anchor_world, scale(dir, arrow_extent));
-        const Vec4   tip_vec4{tip_world.x, tip_world.y, tip_world.z, 1.0F};
+        const Vec4   tip_vec4{.x = tip_world.x, .y = tip_world.y, .z = tip_world.z, .w = 1.0F};
         const auto   tip_screen = project_position(tip_vec4);
         if (arrow_extent > 1.0e-4F && tip_screen.has_value())
         {
@@ -3671,14 +3687,14 @@ void VulkanViewer::recompute_display_stress()
     display_stress_ = base_stress_;
     if (stress_state_.magnitude != 1.0F)
     {
-        for (std::size_t i = 0; i < display_stress_.size(); ++i)
+        for (float &display_stres : display_stress_)
         {
-            if (!std::isfinite(display_stress_[i]))
+            if (!std::isfinite(display_stres))
             {
-                display_stress_[i] = 0.0F;
+                display_stres = 0.0F;
                 continue;
             }
-            display_stress_[i] *= stress_state_.magnitude;
+            display_stres *= stress_state_.magnitude;
         }
     }
 
@@ -3697,7 +3713,9 @@ void VulkanViewer::recompute_display_stress()
     for (std::size_t i = 0; i < mesh_.vertices.size(); ++i)
     {
         const auto &pos4 = mesh_.vertices[i].position;
-        Vec3        delta{pos4.x - anchor_position.x, pos4.y - anchor_position.y, pos4.z - anchor_position.z};
+        Vec3        delta{.x = pos4.x - anchor_position.x,
+                          .y = pos4.y - anchor_position.y,
+                          .z = pos4.z - anchor_position.z};
         const float distance = length(delta);
         if (distance < 1.0e-5F)
         {
@@ -3732,7 +3750,7 @@ void VulkanViewer::apply_display_stress_to_vertices()
     {
         const float stress       = display_stress_[i];
         const Vec3  color        = lerp_color(stress);
-        mesh_.vertices[i].color  = Vec4{color.x, color.y, color.z, 1.0F};
+        mesh_.vertices[i].color  = Vec4{.x = color.x, .y = color.y, .z = color.z, .w = 1.0F};
         mesh_.vertices[i].stress = stress;
     }
     vertex_data_dirty_ = true;
@@ -3808,8 +3826,10 @@ void VulkanViewer::apply_deformation_scale(float weight)
             const Vec3 &interactive = interactive_offsets_[i];
             total_offset            = add(total_offset, scale(interactive, load_scale_));
         }
-        mesh_.vertices[i].position =
-            Vec4{rest.x + total_offset.x, rest.y + total_offset.y, rest.z + total_offset.z, 1.0F};
+        mesh_.vertices[i].position = Vec4{.x = rest.x + total_offset.x,
+                                          .y = rest.y + total_offset.y,
+                                          .z = rest.z + total_offset.z,
+                                          .w = 1.0F};
     }
     current_deformation_weight_ = weight;
     vertex_data_dirty_          = true;
@@ -3866,7 +3886,7 @@ void VulkanViewer::initialize_mesh_state(bool reset_load_reference)
             {
                 const Vec4 &rest = mesh_.rest_positions[i];
                 const Vec4 &def  = mesh_.deformed_positions[i];
-                Vec3        offset{def.x - rest.x, def.y - rest.y, def.z - rest.z};
+                Vec3 const  offset{.x = def.x - rest.x, .y = def.y - rest.y, .z = def.z - rest.z};
                 deformation_offsets_[i] = offset;
                 max_offset              = std::max(max_offset, length(offset));
             }
@@ -3984,7 +4004,7 @@ void VulkanViewer::recompute_interactive_offsets()
     const std::size_t anchor      = std::min(stress_state_.anchor_vertex, mesh_.vertices.size() - 1U);
     const bool        has_rest    = mesh_.rest_positions.size() == mesh_.vertices.size();
     const Vec4       &anchor_rest = has_rest ? mesh_.rest_positions[anchor] : mesh_.vertices[anchor].position;
-    const Vec3        anchor_pos{anchor_rest.x, anchor_rest.y, anchor_rest.z};
+    const Vec3        anchor_pos{.x = anchor_rest.x, .y = anchor_rest.y, .z = anchor_rest.z};
     const Vec3        direction     = stress_direction();
     const Vec3        extent        = subtract(mesh_.bounds_max, mesh_.bounds_min);
     const float       normalization = std::max({extent.x, extent.y, extent.z, 1.0F});
@@ -3992,7 +4012,7 @@ void VulkanViewer::recompute_interactive_offsets()
     for (std::size_t i = 0; i < mesh_.vertices.size(); ++i)
     {
         const Vec4 &pos4 = has_rest ? mesh_.rest_positions[i] : mesh_.vertices[i].position;
-        Vec3        delta{pos4.x - anchor_pos.x, pos4.y - anchor_pos.y, pos4.z - anchor_pos.z};
+        Vec3        delta{.x = pos4.x - anchor_pos.x, .y = pos4.y - anchor_pos.y, .z = pos4.z - anchor_pos.z};
         const float distance = length(delta);
         if (distance < 1.0e-5F)
         {
@@ -4062,7 +4082,9 @@ auto VulkanViewer::estimate_auto_falloff() const -> float
             continue;
         }
         const auto &pos4 = mesh_.vertices[i].position;
-        Vec3        delta{pos4.x - anchor_position.x, pos4.y - anchor_position.y, pos4.z - anchor_position.z};
+        Vec3 const  delta{.x = pos4.x - anchor_position.x,
+                          .y = pos4.y - anchor_position.y,
+                          .z = pos4.z - anchor_position.z};
         const float distance = length(delta);
         if (distance < 1.0e-4F)
         {
@@ -4081,8 +4103,7 @@ auto VulkanViewer::estimate_auto_falloff() const -> float
     {
         return 0.35F;
     }
-    const float mean_gradient =
-        static_cast<float>(accumulated_gradient / static_cast<double>(gradient_count));
+    const auto mean_gradient = static_cast<float>(accumulated_gradient / static_cast<double>(gradient_count));
     const float estimated = std::clamp(mean_gradient / anchor_stress, 0.05F, 2.0F);
     return estimated;
 }
@@ -4093,8 +4114,9 @@ auto VulkanViewer::estimate_auto_falloff() const -> float
 auto VulkanViewer::stress_direction() const noexcept -> Vec3
 {
     const float cos_p = std::cos(stress_state_.pitch);
-    return Vec3{cos_p * std::cos(stress_state_.yaw), std::sin(stress_state_.pitch),
-                cos_p * std::sin(stress_state_.yaw)};
+    return Vec3{.x = cos_p * std::cos(stress_state_.yaw),
+                .y = std::sin(stress_state_.pitch),
+                .z = cos_p * std::sin(stress_state_.yaw)};
 }
 
 /**
@@ -4107,7 +4129,7 @@ auto VulkanViewer::get_vertex_position(std::size_t index) const -> Vec3
         return Vec3{};
     }
     const auto &pos = mesh_.vertices[index].position;
-    return Vec3{pos.x, pos.y, pos.z};
+    return Vec3{.x = pos.x, .y = pos.y, .z = pos.z};
 }
 
 /**
@@ -4167,7 +4189,7 @@ void VulkanViewer::framebuffer_resize_callback(GLFWwindow *window, int /*width*/
     }
 }
 
-void VulkanViewer::scroll_callback(GLFWwindow *window, double, double yoffset)
+void VulkanViewer::scroll_callback(GLFWwindow *window, double /*unused*/, double yoffset)
 {
     if (auto *viewer = static_cast<VulkanViewer *>(glfwGetWindowUserPointer(window)))
     {
@@ -4193,7 +4215,7 @@ auto VulkanViewer::load_shader_module(const std::filesystem::path &path) const -
     }
     log_viewer("load_shader_module: '{}' ({} bytes)", path.string(), static_cast<std::size_t>(size));
     file.seekg(0, std::ios::beg);
-    const std::size_t byte_count = static_cast<std::size_t>(size);
+    const auto byte_count = static_cast<std::size_t>(size);
     if ((byte_count % sizeof(std::uint32_t)) != 0U)
     {
         throw std::runtime_error("shader byte size misaligned: " + path.string());
@@ -4216,12 +4238,14 @@ auto VulkanViewer::load_shader_module(const std::filesystem::path &path) const -
 
 } // namespace
 
-[[nodiscard]] auto run_viewer_once(const mesh::Mesh &mesh, mesh::pack::PackingResult packing,
+[[nodiscard]] auto run_viewer_once(const mesh::Mesh                                  &mesh,
+                                   mesh::pack::PackingResult                          packing,
                                    post::DerivedFieldSet                              derived,
                                    std::vector<physics::materials::ElasticProperties> materials,
-                                   config::SolverSettings solver_settings, config::TimeSettings time_settings,
-                                   physics::materials::RayleighCoefficients rayleigh, double simulation_time,
-                                   std::filesystem::path config_directory)
+                                   config::SolverSettings                             solver_settings,
+                                   config::TimeSettings                               time_settings,
+                                   physics::materials::RayleighCoefficients           rayleigh,
+                                   double simulation_time, std::filesystem::path config_directory)
     -> std::expected<ViewerResult, ViewerError>
 {
     try

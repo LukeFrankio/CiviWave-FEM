@@ -40,7 +40,7 @@ namespace cwf::gpu::newmark
 namespace
 {
 
-constexpr auto bytes_per_dof = sizeof(float);
+constexpr auto kBytesPerDof  = sizeof(float);
 constexpr auto kWaveSize     = 64U;
 
 struct alignas(16) GlobalUniform
@@ -300,7 +300,7 @@ void Stepper::GpuRuntime::destroy()
         descriptor_pool_ = VK_NULL_HANDLE;
     }
 
-    const auto destroy_buffer = [allocator](MappedBuffer &buffer) {
+    const auto destroy_buffer = [allocator](MappedBuffer &buffer) -> void {
         if (buffer.buffer != VK_NULL_HANDLE)
         {
             vmaDestroyBuffer(allocator, buffer.buffer, buffer.allocation);
@@ -611,7 +611,7 @@ auto Stepper::GpuRuntime::create_descriptor_pool_and_sets() -> std::expected<voi
     update_set1_     = sets[3];
     update_set2_     = sets[4];
 
-    const auto buffer_info = [](const MappedBuffer &buffer) {
+    const auto buffer_info = [](const MappedBuffer &buffer) -> VkDescriptorBufferInfo {
         return VkDescriptorBufferInfo{
             .buffer = buffer.buffer,
             .offset = 0U,
@@ -623,7 +623,7 @@ auto Stepper::GpuRuntime::create_descriptor_pool_and_sets() -> std::expected<voi
     writes.reserve(15U);
 
     const auto add_write = [&writes](VkDescriptorSet set, std::uint32_t binding, VkDescriptorType type,
-                                     const VkDescriptorBufferInfo &info) {
+                                     const VkDescriptorBufferInfo &info) -> void {
         VkWriteDescriptorSet write{};
         write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         write.dstSet          = set;
@@ -689,7 +689,7 @@ auto Stepper::GpuRuntime::load_shader_module(const std::filesystem::path &path, 
     }
 
     file.seekg(0, std::ios::beg);
-    const std::size_t byte_count = static_cast<std::size_t>(size);
+    const auto byte_count = static_cast<std::size_t>(size);
     if ((byte_count % sizeof(std::uint32_t)) != 0U)
     {
         return std::unexpected(Stepper::make_error("shader byte size misaligned", {path.string()}));
@@ -731,7 +731,7 @@ auto Stepper::GpuRuntime::create_pipelines(const std::filesystem::path &shader_d
         return status;
     }
 
-    auto make_info = [this](VkShaderModule module) {
+    auto make_info = [this](VkShaderModule module) -> VkComputePipelineCreateInfo {
         VkComputePipelineCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
 
@@ -1034,14 +1034,16 @@ auto Stepper::GpuRuntime::run_update(Stepper &stepper) -> std::expected<void, St
 }
 Stepper::Stepper(mesh::pack::PackingResult                             &packing,
                  std::span<const physics::materials::ElasticProperties> materials,
-                 physics::materials::RayleighCoefficients               rayleigh,
-                 const config::SolverSettings &solver_settings, const config::TimeSettings &time_settings,
-                 AdaptivePolicy adaptive_policy)
+                 physics::materials::RayleighCoefficients rayleigh, config::SolverSettings solver_settings,
+                 const config::TimeSettings &time_settings, AdaptivePolicy adaptive_policy)
     : packing_{&packing}, materials_storage_{materials.begin(), materials.end()}, rayleigh_{rayleigh},
-      solver_settings_{solver_settings}, time_settings_{time_settings}, adaptive_policy_{adaptive_policy},
-      node_count_{packing.metadata.node_count}, dof_count_{packing.metadata.dof_count}
+      solver_settings_{std::move(solver_settings)}, time_settings_{time_settings},
+      adaptive_policy_{adaptive_policy},
+      current_dt_(time_settings_.initial_dt > 0.0 ? time_settings_.initial_dt : 1.0e-3),
+      node_count_{packing.metadata.node_count},
+      dof_count_{packing.metadata.dof_count}
 {
-    current_dt_     = time_settings_.initial_dt > 0.0 ? time_settings_.initial_dt : 1.0e-3;
+
     coeffs_         = physics::newmark::make_coefficients(current_dt_, beta_, gamma_);
     update_scalars_ = physics::newmark::compute_update_scalars(coeffs_);
 
@@ -1072,6 +1074,7 @@ Stepper::Stepper(mesh::pack::PackingResult                             &packing,
         .reduction_partials     = packing.metadata.reduction_partials,
     };
 
+    // Copy the fully-initialized system, then override scales for stiffness-only application
     stiffness_only_system_                 = matrix_system_;
     stiffness_only_system_.stiffness_scale = 1.0;
     stiffness_only_system_.mass_factor     = 0.0;
@@ -1082,7 +1085,7 @@ Stepper::Stepper(mesh::pack::PackingResult                             &packing,
              .residual         = std::span<float>(solver_buffers.r.data(), solver_buffers.r.size()),
              .search_direction = std::span<float>(solver_buffers.p.data(), solver_buffers.p.size()),
              .preconditioned   = std::span<float>(solver_buffers.z.data(), solver_buffers.z.size()),
-             .matvec           = std::span<float>(solver_buffers.Ap.data(), solver_buffers.Ap.size()),
+            .matvec           = std::span<float>(solver_buffers.ap.data(), solver_buffers.ap.size()),
              .partials         = std::span<double>(solver_buffers.partials.data(), solver_buffers.partials.size()),
     };
 
@@ -1199,7 +1202,7 @@ auto Stepper::assemble_rhs() -> std::expected<void, StepError>
 
     for (std::size_t node = 0; node < node_count_; ++node)
     {
-        const double mass_value = static_cast<double>(mass[node]);
+        const auto   mass_value = static_cast<double>(mass[node]);
         const auto   base       = node * 3U;
 
         const auto u   = std::array<double, 3>{static_cast<double>(nodes.displacement.x[node]),
@@ -1216,7 +1219,7 @@ auto Stepper::assemble_rhs() -> std::expected<void, StepError>
         {
             const double mass_term    = mass_value * (a0 * u[axis] + a2 * v[axis] + a3 * acc[axis]);
             const double damping_term = a1 * u[axis] + a4 * v[axis] + a5 * acc[axis];
-            const double force        = static_cast<double>(external_force_[base + axis]);
+            const auto   force        = static_cast<double>(external_force_[base + axis]);
             const double total        = force + mass_term + rayleigh_.alpha * mass_value * damping_term;
             rhs_[base + axis]         = static_cast<float>(total);
             damping_rhs_[base + axis] = static_cast<float>(damping_term);
@@ -1315,8 +1318,8 @@ void Stepper::apply_state_update()
 {
     auto       &nodes              = node_buffers();
     const auto  delta              = solver_vectors_.solution;
-    const float gamma_over_beta_dt = static_cast<float>(update_scalars_.gamma_over_beta_dt);
-    const float inv_beta_dt2       = static_cast<float>(update_scalars_.inv_beta_dt2);
+    const auto  gamma_over_beta_dt = static_cast<float>(update_scalars_.gamma_over_beta_dt);
+    const auto  inv_beta_dt2       = static_cast<float>(update_scalars_.inv_beta_dt2);
 
     for (std::size_t node = 0; node < node_count_; ++node)
     {
@@ -1366,7 +1369,7 @@ void Stepper::adapt_timestep(const pcg::PcgTelemetry &pcg_stats, StepTelemetry &
     const double low_iteration_threshold =
         adaptive_policy_.low_iteration_ratio * static_cast<double>(solver_settings_.max_iterations);
 
-    const double iteration_count = static_cast<double>(pcg_stats.iterations);
+    const auto iteration_count = static_cast<double>(pcg_stats.iterations);
 
     if (iteration_count <= low_iteration_threshold)
     {
