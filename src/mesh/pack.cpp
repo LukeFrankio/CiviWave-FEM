@@ -49,9 +49,15 @@ namespace
 {
     if (!std::isfinite(value))
     {
-        return value > 0 ? std::numeric_limits<float>::infinity()
-                         : (value < 0 ? -std::numeric_limits<float>::infinity()
-                                      : std::numeric_limits<float>::quiet_NaN());
+        if (value > 0)
+        {
+            return std::numeric_limits<float>::infinity();
+        }
+        if (value < 0)
+        {
+            return -std::numeric_limits<float>::infinity();
+        }
+        return std::numeric_limits<float>::quiet_NaN();
     }
     if (value > static_cast<double>(std::numeric_limits<float>::max()))
     {

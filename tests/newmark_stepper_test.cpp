@@ -184,8 +184,8 @@ class NewmarkStepperFixture : public ::testing::Test
                                     const cwf::config::TimeSettings  &time_settings,
                                     cwf::gpu::newmark::AdaptivePolicy policy = {}) const -> Stepper
     {
-        return Stepper(pack, std::span<const cwf::physics::materials::ElasticProperties>{materials}, rayleigh,
-                       cfg.solver, time_settings, policy);
+        return {pack, std::span<const cwf::physics::materials::ElasticProperties>{materials}, rayleigh,
+                cfg.solver, time_settings, policy};
     }
 
     cwf::mesh::Mesh                                         mesh{};

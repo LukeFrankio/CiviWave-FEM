@@ -3146,11 +3146,16 @@ void VulkanViewer::build_ui()
                 ImGui::Text("Physical Groups: %zu", source_mesh_->physical_groups.size());
                 for (const auto &group : source_mesh_->physical_groups)
                 {
-                    const char *dim_str = group.dimension == 3U   ? "vol"
-                                          : group.dimension == 2U ? "surf"
-                                          : group.dimension == 1U ? "line"
-                                                                  : "pt";
-                    ImGui::BulletText("%s (id=%u, %s)", group.name.c_str(), group.id, dim_str);
+                    const auto get_dim_str = [](std::uint32_t dim) -> const char * {
+                        switch (dim)
+                        {
+                        case 3U: return "vol";
+                        case 2U: return "surf";
+                        case 1U: return "line";
+                        default: return "pt";
+                        }
+                    };
+                    ImGui::BulletText("%s (id=%u, %s)", group.name.c_str(), group.id, get_dim_str(group.dimension));
                 }
             }
             else

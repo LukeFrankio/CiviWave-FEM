@@ -42,7 +42,11 @@ Checks: >
   -hicpp-member-init,
   -hicpp-move-const-arg,
   -cert-err58-cpp,
-  -llvm-include-order
+  -llvm-include-order,
+  -bugprone-easily-swappable-parameters,
+  -misc-include-cleaner,
+  -misc-misplaced-const,
+  -readability-suspicious-call-argument
 HeaderFilterRegex: '^(src|include|tests)[/\\].*'
 # AnalyzeTemporaryDtors: true  # commented out because some clang-tidy versions don't recognize this key
 FormatStyle: file

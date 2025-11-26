@@ -148,7 +148,7 @@ auto load_config_from_string(std::string_view yaml_text) -> ConfigResult
 {
     try
     {
-        const auto node = YAML::Load(yaml_text.data());
+        const auto node = YAML::Load(std::string{yaml_text});
         return parse_config_node(node);
     }
     catch (const YAML::Exception &ex)

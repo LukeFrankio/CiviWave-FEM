@@ -114,7 +114,9 @@ TEST_P(ConfigInvalidTest, ReportsDetailedValidationErrors)
     }
 }
 
-static auto make_invalid_cases() -> std::vector<InvalidConfigCase>
+namespace
+{
+auto make_invalid_cases() -> std::vector<InvalidConfigCase>
 {
     using cwf::test_support::AssignmentSpec;
     using cwf::test_support::ConfigBuilderOptions;
@@ -335,6 +337,7 @@ static auto make_invalid_cases() -> std::vector<InvalidConfigCase>
 
     return cases;
 }
+}  // namespace
 
 INSTANTIATE_TEST_SUITE_P(ExhaustiveInvalidConfigs, ConfigInvalidTest,
                          ::testing::ValuesIn(make_invalid_cases()),

@@ -243,7 +243,7 @@ struct ElementsParseResult
             Node node{.original_id = node_ids[static_cast<std::size_t>(i)],
                       .position    = common::Vec3{x, y, z}};
             id_to_index[node.original_id] = nodes.size();
-            nodes.push_back(std::move(node));
+            nodes.push_back(node);
             const auto node_index = static_cast<std::uint32_t>(nodes.size() - 1U);
             if (phys_ids != nullptr)
             {
@@ -400,7 +400,7 @@ struct ElementsParseResult
                     element.nodes[node_idx] = static_cast<std::uint32_t>(map_iter->second);
                 }
                 result.used_physical_ids.insert(physical_group_id);
-                result.volume_elements.push_back(std::move(element));
+                result.volume_elements.push_back(element);
             }
             else if (is_surface)
             {
@@ -432,7 +432,7 @@ struct ElementsParseResult
                 result.used_physical_ids.insert(physical_group_id);
                 const auto index = result.surface_elements.size();
                 result.surface_groups[physical_group_id].push_back(index);
-                result.surface_elements.push_back(std::move(surface));
+                result.surface_elements.push_back(surface);
             }
             else
             {
