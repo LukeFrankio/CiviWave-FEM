@@ -24,19 +24,21 @@ Checks: >
   -readability-function-cognitive-complexity,
   -readability-magic-numbers,
   -cppcoreguidelines-avoid-magic-numbers,
-  -readability-math-missing-parentheses
+  -readability-math-missing-parentheses,
+  -readability-identifier-length
 HeaderFilterRegex: '^(src|include|tests)[/\\].*'
 # AnalyzeTemporaryDtors: true  # commented out because some clang-tidy versions don't recognize this key
 FormatStyle: file
 User: CiviWave
 ExtraArgs:
   - "-std=c++2c"
-  - "-fno-exceptions"
   - "-fno-rtti"
   - "-Wall"
   - "-Wextra"
   - "--system-header-prefix=vk_mem_alloc.h"
   - "--system-header-prefix=VulkanMemoryAllocator"
+  - "-fexceptions"
+  - "-misc-non-private-member-variables-in-classes"
 CheckOptions:
   - key: readability-identifier-naming.NamespaceCase
     value: lower_case

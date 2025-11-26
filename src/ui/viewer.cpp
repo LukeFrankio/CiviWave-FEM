@@ -2276,7 +2276,7 @@ auto VulkanViewer::find_memory_type(std::uint32_t type_filter, VkMemoryPropertyF
     vkGetPhysicalDeviceMemoryProperties(physical_device_, &mem);
     for (std::uint32_t i = 0; i < mem.memoryTypeCount; ++i)
     {
-        if (((type_filter & (1U << i)) != 0u) &&
+        if (((type_filter & (1U << i)) != 0U) &&
             (mem.memoryTypes[i].propertyFlags & properties) == properties)
         {
             return i;
@@ -2593,7 +2593,7 @@ void VulkanViewer::cleanup_swapchain()
 {
     log_viewer("cleanup_swapchain: tearing down {} framebuffers and {} image views", framebuffers_.size(),
                swapchain_image_views_.size());
-    for (auto framebuffer : framebuffers_)
+    for (auto *framebuffer : framebuffers_)
     {
         vkDestroyFramebuffer(device_, framebuffer, nullptr);
     }
@@ -2613,7 +2613,7 @@ void VulkanViewer::cleanup_swapchain()
         vkFreeMemory(device_, depth_memory_, nullptr);
         depth_memory_ = VK_NULL_HANDLE;
     }
-    for (auto view : swapchain_image_views_)
+    for (auto *view : swapchain_image_views_)
     {
         vkDestroyImageView(device_, view, nullptr);
     }
@@ -2873,7 +2873,7 @@ void VulkanViewer::apply_scroll_delta()
 
 void VulkanViewer::update_window_title(double fps)
 {
-    std::string title = std::format("CiviWave FEM — {:.2f} FPS — t = {:.4f}s", fps, simulation_time_);
+    std::string const title = std::format("CiviWave FEM — {:.2f} FPS — t = {:.4f}s", fps, simulation_time_);
     glfwSetWindowTitle(window_, title.c_str());
 }
 
@@ -3454,7 +3454,7 @@ void VulkanViewer::update_projected_vertices()
         }
         else
         {
-            std::fill(projected_visible_.begin(), projected_visible_.end(), false);
+            std::ranges::fill(projected_visible_, false);
         }
         return;
     }
@@ -3996,7 +3996,7 @@ void VulkanViewer::recompute_interactive_offsets()
     {
         interactive_offsets_.assign(mesh_.vertices.size(), Vec3{});
     }
-    std::fill(interactive_offsets_.begin(), interactive_offsets_.end(), Vec3{});
+    std::ranges::fill(interactive_offsets_, Vec3{});
     if (!stress_state_.enabled)
     {
         return;
@@ -4059,7 +4059,7 @@ void VulkanViewer::refresh_stress_reference_range()
     base_stress_max_             = max_value;
     const float delta            = max_value - min_value;
     const float fallback_range   = std::max(std::abs(max_value), 1.0F);
-    base_stress_reference_range_ = std::max(std::abs(delta), std::max(fallback_range, 1.0e-3F));
+    base_stress_reference_range_ = std::max({std::abs(delta), fallback_range, 1.0e-3F});
 }
 
 auto VulkanViewer::estimate_auto_falloff() const -> float
@@ -4251,9 +4251,9 @@ auto VulkanViewer::load_shader_module(const std::filesystem::path &path) const -
     try
     {
         const auto shader_dir = std::filesystem::path{CWF_SHADER_BUILD_DIR};
-        auto       backend_expected =
-            SimulationBackend::create(std::move(packing), std::move(derived), std::move(materials),
-                                      solver_settings, time_settings, rayleigh, simulation_time, shader_dir);
+        auto       backend_expected = SimulationBackend::create(
+            std::move(packing), std::move(derived), std::move(materials), std::move(solver_settings),
+            time_settings, rayleigh, simulation_time, shader_dir);
         if (!backend_expected)
         {
             return std::unexpected(backend_expected.error());
@@ -4265,10 +4265,10 @@ auto VulkanViewer::load_shader_module(const std::filesystem::path &path) const -
                    simulation_time, buffers.vertices.size(), buffers.indices.size(), camera.distance);
 
         ViewerResult result{};
-        GlfwContext  glfw{};
+        GlfwContext const glfw{};
         {
             VulkanViewer viewer(glfw.window, mesh, buffers, camera, simulation_time, std::move(backend),
-                                config_directory);
+                                std::move(config_directory));
             viewer.run();
             result.restart_with_config = viewer.restart_requested();
         }

@@ -1075,7 +1075,7 @@ Stepper::Stepper(mesh::pack::PackingResult                             &packing,
     };
 
     // Copy the fully-initialized system, then override scales for stiffness-only application
-    stiffness_only_system_                 = matrix_system_;
+    stiffness_only_system_                 = matrix_system_;/*NOLINT*/
     stiffness_only_system_.stiffness_scale = 1.0;
     stiffness_only_system_.mass_factor     = 0.0;
 
