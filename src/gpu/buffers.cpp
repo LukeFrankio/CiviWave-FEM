@@ -6,9 +6,16 @@
 #include "cwf/gpu/buffers.hpp"
 
 #include <algorithm>
-#include <bit>
-#include <ranges>
+#include <cstddef>
+#include <cstdint>
 #include <span>
+#include <string_view>
+#include <vector>
+
+#include "cwf/gpu/sharding.hpp"
+#include "cwf/gpu/upload.hpp"
+#include "cwf/mesh/pack.hpp"
+#include "cwf/physics/materials.hpp"
 
 namespace cwf::gpu::buffers
 {

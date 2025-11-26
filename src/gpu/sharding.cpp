@@ -13,7 +13,11 @@
 
 #include <algorithm>
 #include <bit>
-#include <numeric>
+#include <cstddef>
+#include <cstdint>
+#include <expected>
+#include <string>
+#include <vector>
 
 namespace cwf::gpu::shard
 {

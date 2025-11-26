@@ -5,11 +5,22 @@
 #include "cwf/mesh/preprocess.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <expected>
 #include <format>
 #include <limits>
 #include <numbers>
+#include <string>
 #include <unordered_map>
+#include <utility>
+#include <vector>
+
+#include "cwf/common/math.hpp"
+#include "cwf/config/config.hpp"
+#include "cwf/mesh/mesh.hpp"
 
 namespace cwf::mesh::pre
 {

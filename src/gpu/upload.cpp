@@ -11,7 +11,15 @@
 
 #include <algorithm>
 #include <bit>
+#include <cstddef>
+#include <expected>
+#include <span>
+#include <string>
+#include <string_view>
 #include <unordered_map>
+#include <vector>
+
+#include "cwf/gpu/sharding.hpp"
 
 namespace cwf::gpu::upload
 {

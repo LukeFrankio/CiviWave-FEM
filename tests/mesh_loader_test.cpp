@@ -2,13 +2,16 @@
  * @file mesh_loader_test.cpp
  * @brief gmsh parser shakedown so malformed meshes get wrecked fast uwu
  */
+#include <cstdint>
 #include <filesystem>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <initializer_list>
 #include <string>
+#include <string_view>
+#include <utility>
 
 #include "cwf/mesh/mesh.hpp"
-#include "support/config_builder.hpp"
 #include "test_config.hpp"
 
 using testing::ElementsAre;

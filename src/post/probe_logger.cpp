@@ -4,9 +4,20 @@
  */
 #include "cwf/post/probe_logger.hpp"
 
+#include <cstddef>
+#include <cstdint>
+#include <expected>
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
+#include <ios>
 #include <sstream>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "cwf/mesh/pack.hpp"
+#include "cwf/post/derived_fields.hpp"
 
 namespace cwf::post
 {

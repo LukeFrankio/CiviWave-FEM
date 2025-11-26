@@ -5,13 +5,27 @@
 
 #include "cwf/gpu/device_buffers.hpp"
 
-#include <algorithm>
 #include <cassert>
+#include <cstdint>
 #include <cstring>
+#include <expected>
 #include <format>
-#include <print>
+#include <initializer_list>
+#include <span>
 #include <stdexcept>
+#include <string>
+#include <string_view>
+#include <unordered_map>
 #include <utility>
+#include <vector>
+#include <vulkan/vulkan_core.h>
+
+#include "cwf/gpu/buffers.hpp"
+#include "cwf/gpu/sharding.hpp"
+#include "cwf/gpu/upload.hpp"
+#include "cwf/gpu/vulkan_context.hpp"
+#include "cwf/mesh/pack.hpp"
+#include "cwf/physics/materials.hpp"
 
 namespace cwf::gpu
 {

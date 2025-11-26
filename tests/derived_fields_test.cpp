@@ -4,10 +4,12 @@
  */
 
 #include <array>
-#include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <limits>
+#include <utility>
 #include <vector>
 
 #include "cwf/common/math.hpp"

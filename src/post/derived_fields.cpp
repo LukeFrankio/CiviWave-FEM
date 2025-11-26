@@ -19,6 +19,9 @@
 #include <span>
 #include <vector>
 
+#include "cwf/mesh/pack.hpp"
+#include "cwf/physics/materials.hpp"
+
 namespace cwf::post
 {
 namespace

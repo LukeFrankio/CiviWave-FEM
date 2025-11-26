@@ -4,12 +4,12 @@
 #include <array>
 #include <cassert>
 #include <cstddef>
-#include <cstring>
+#include <cstdint>
+#include <expected>
 #include <format>
 #include <initializer_list>
-#include <limits>
+#include <optional>
 #include <print>
-#include <ranges>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -17,6 +17,7 @@
 #include <tuple>
 #include <utility>
 #include <vector>
+#include <vulkan/vulkan_core.h>
 
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"

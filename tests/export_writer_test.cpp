@@ -3,10 +3,16 @@
  * @brief smoke tests for the VTU writer + probe logger stack
  */
 
+#include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
+#include <ios>
 #include <limits>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "cwf/common/math.hpp"
 #include "cwf/config/config.hpp"

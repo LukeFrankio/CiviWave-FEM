@@ -2,10 +2,12 @@
  * @file preprocess_test.cpp
  * @brief preprocessing pipeline regression so gradients + masses stay sane uwu
  */
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <optional>
 #include <stdexcept>
 #include <string>
 

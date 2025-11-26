@@ -4,7 +4,10 @@
  */
 #include "cwf/physics/newmark.hpp"
 
-#include <cmath>
+#include <cstddef>
+#include <vector>
+
+#include "cwf/physics/materials.hpp"
 
 namespace cwf::physics::newmark
 {

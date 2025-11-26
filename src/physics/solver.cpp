@@ -4,16 +4,25 @@
  */
 #include "cwf/physics/solver.hpp"
 
-#include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <limits>
-#include <numeric>
 #include <optional>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
+#include <vector>
 
 #include "cwf/common/math.hpp"
+#include "cwf/config/config.hpp"
+#include "cwf/mesh/mesh.hpp"
+#include "cwf/mesh/preprocess.hpp"
 #include "cwf/physics/loads.hpp"
+#include "cwf/physics/materials.hpp"
+#include "cwf/physics/newmark.hpp"
 
 namespace cwf::physics::solver
 {

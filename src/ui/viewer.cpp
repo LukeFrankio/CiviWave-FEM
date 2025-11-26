@@ -4,6 +4,18 @@
  */
 #include "cwf/ui/viewer.hpp"
 
+#include <exception>
+#include <initializer_list>
+#include <ios>
+#include <unordered_map>
+#include <vulkan/vulkan_core.h>
+
+#include "cwf/config/config.hpp"
+#include "cwf/mesh/mesh.hpp"
+#include "cwf/mesh/pack.hpp"
+#include "cwf/physics/materials.hpp"
+#include "cwf/post/derived_fields.hpp"
+
 #if defined(CWF_ENABLE_UI) && CWF_ENABLE_UI
 
 #define GLFW_INCLUDE_VULKAN
@@ -28,7 +40,6 @@
 #include <numbers>
 #include <optional>
 #include <print>
-#include <ranges>
 #include <set>
 #include <span>
 #include <stdexcept>

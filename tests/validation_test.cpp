@@ -22,22 +22,25 @@
  * @note targets AMD iGPU with Vulkan 1.3 compute pipeline
  */
 
+#include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <filesystem>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include <limits>
+#include <iostream>
 #include <numbers>
 #include <numeric>
 #include <optional>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "cwf/common/math.hpp"
 #include "cwf/config/config.hpp"
 #include "cwf/mesh/mesh.hpp"
 #include "cwf/mesh/preprocess.hpp"
-#include "cwf/physics/loads.hpp"
 #include "cwf/physics/materials.hpp"
 #include "cwf/physics/newmark.hpp"
 #include "cwf/physics/solver.hpp"

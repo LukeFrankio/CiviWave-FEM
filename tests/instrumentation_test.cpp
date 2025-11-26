@@ -18,17 +18,19 @@
  * @note documented with Doxygen 1.15 beta because testing is praxis ✨
  */
 
-#include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
 #include <sstream>
 #include <string>
+#include <system_error>
 #include <vector>
-#include <yaml-cpp/yaml.h>
 
 #include "cwf/gpu/instrumentation.hpp"
+#include "cwf/gpu/pcg.hpp"
+#include <yaml-cpp/yaml.h>
 
 namespace cwf::gpu::instrumentation
 {

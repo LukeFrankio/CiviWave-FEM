@@ -13,12 +13,13 @@
 
 #include <array>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <initializer_list>
 #include <limits>
-#include <numeric>
-#include <optional>
+#include <utility>
 #include <vector>
 
 #include "cwf/common/math.hpp"

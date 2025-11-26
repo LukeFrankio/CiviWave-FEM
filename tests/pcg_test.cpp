@@ -6,13 +6,16 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <limits>
-#include <numeric>
+#include <span>
 #include <vector>
 
+#include "cwf/common/math.hpp"
 #include "cwf/config/config.hpp"
 #include "cwf/gpu/pcg.hpp"
 #include "cwf/mesh/mesh.hpp"

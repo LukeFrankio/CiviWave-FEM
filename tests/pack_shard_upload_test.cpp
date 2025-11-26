@@ -19,21 +19,19 @@
  * @note doc'd with Doxygen 1.15 beta to appease the comment goblins
  */
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <limits>
-#include <numeric>
 #include <optional>
 #include <span>
 #include <string>
-#include <string_view>
 #include <unordered_map>
 #include <vector>
 
+#include "cwf/common/math.hpp"
 #include "cwf/config/config.hpp"
 #include "cwf/gpu/sharding.hpp"
 #include "cwf/gpu/upload.hpp"

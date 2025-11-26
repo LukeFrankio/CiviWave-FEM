@@ -22,24 +22,32 @@
 
 #include "cwf/gpu/instrumentation.hpp"
 
-#include <algorithm>
+#include <array>
 #include <chrono>
-#include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
+#include <expected>
+#include <filesystem>
 #include <format>
 #include <fstream>
 #include <initializer_list>
+#include <ios>
+#include <optional>
 #include <print>
-#include <sstream>
+#include <ratio>
+#include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <vector>
-#include <vulkan/vulkan.h>
-#include <yaml-cpp/yaml.h>
+#include <vulkan/vulkan_core.h>
 
+#include "cwf/gpu/pcg.hpp"
 #include "cwf/gpu/vulkan_context.hpp"
+#include "yaml-cpp/emitter.h"
+#include "yaml-cpp/emittermanip.h"
 
 #if defined(CWF_ENABLE_TRACY) && CWF_ENABLE_TRACY
 #include <Tracy.hpp>

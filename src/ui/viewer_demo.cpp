@@ -13,6 +13,8 @@
  */
 
 #include <array>
+#include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <expected>
 #include <filesystem>

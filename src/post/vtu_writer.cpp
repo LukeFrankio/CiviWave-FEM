@@ -4,17 +4,25 @@
  */
 #include "cwf/post/vtu_writer.hpp"
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
+#include <expected>
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
+#include <ios>
 #include <limits>
-#include <span>
 #include <stdexcept>
 #include <string>
 #include <tuple>
+#include <utility>
+#include <vector>
+
+#include "cwf/mesh/mesh.hpp"
+#include "cwf/mesh/pack.hpp"
+#include "cwf/post/derived_fields.hpp"
 
 namespace cwf::post
 {

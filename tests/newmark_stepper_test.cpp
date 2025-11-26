@@ -10,19 +10,20 @@
  */
 
 #include <array>
-#include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <limits>
 #include <span>
 #include <vector>
 
+#include "cwf/common/math.hpp"
 #include "cwf/config/config.hpp"
 #include "cwf/gpu/newmark_stepper.hpp"
 #include "cwf/mesh/mesh.hpp"
 #include "cwf/mesh/pack.hpp"
 #include "cwf/mesh/preprocess.hpp"
-#include "cwf/physics/loads.hpp"
 #include "cwf/physics/materials.hpp"
 #include "cwf/physics/newmark.hpp"
 #include "cwf/physics/solver.hpp"

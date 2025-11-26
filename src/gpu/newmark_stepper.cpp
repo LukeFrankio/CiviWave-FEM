@@ -14,23 +14,28 @@
 
 #include "cwf/gpu/newmark_stepper.hpp"
 
-#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <expected>
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
+#include <ios>
 #include <limits>
 #include <memory>
-#include <numeric>
+#include <span>
 #include <utility>
 #include <vector>
 #include <vk_mem_alloc.h>
-#include <vulkan/vulkan.h>
+#include <vulkan/vulkan_core.h>
 
+#include "cwf/config/config.hpp"
+#include "cwf/gpu/device_buffers.hpp"
 #include "cwf/gpu/pcg.hpp"
+#include "cwf/gpu/vulkan_context.hpp"
 #include "cwf/mesh/pack.hpp"
 #include "cwf/physics/materials.hpp"
 #include "cwf/physics/newmark.hpp"

@@ -4,9 +4,22 @@
  */
 #include "cwf/post/output_manager.hpp"
 
+#include <cstdint>
+#include <expected>
+#include <filesystem>
 #include <format>
+#include <initializer_list>
+#include <span>
 #include <string>
 #include <string_view>
+#include <utility>
+
+#include "cwf/config/config.hpp"
+#include "cwf/mesh/mesh.hpp"
+#include "cwf/mesh/pack.hpp"
+#include "cwf/physics/materials.hpp"
+#include "cwf/post/derived_fields.hpp"
+#include "cwf/post/vtu_writer.hpp"
 
 namespace cwf::post
 {

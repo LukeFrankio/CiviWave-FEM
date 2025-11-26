@@ -4,11 +4,17 @@
  */
 #include "cwf/physics/loads.hpp"
 
-#include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "cwf/common/math.hpp"
+#include "cwf/config/config.hpp"
+#include "cwf/mesh/mesh.hpp"
+#include "cwf/mesh/preprocess.hpp"
 
 namespace cwf::physics::loads
 {
