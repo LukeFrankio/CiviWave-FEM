@@ -1,0 +1,504 @@
+{
+  "repo_notes": [
+    {
+      "content": "CiviWave-FEM is a GPU-accelerated Finite Element Method (FEM) solver optimized for AMD integrated GPUs. It uses Vulkan 1.3 compute pipelines with Slang shaders, C++26 with GCC 15.2, and CMake 4.1.2. The codebase follows a source-first dependency policy using FetchContent. Key directories: src/ (core implementation), include/cwf/ (public headers), tests/ (Google Test suite), docs/ (specifications and setup guides). The physics implementation uses linear small-strain elasticity with implicit Newmark-β time integration and a matrix-free PCG solver. All GPU kernels are written in Slang and compiled to SPIR-V.",
+      "author": "LukeFrankio"
+    },
+    {
+      "content": "CiviWave-FEM é um solucionador de Método dos Elementos Finitos (MEF) acelerado por GPU, otimizado para GPUs integradas AMD. Utiliza pipelines de computação Vulkan 1.3 com shaders Slang, C++26 com GCC 15.2 e CMake 4.1.2. O código segue uma política de dependências source-first usando FetchContent. Diretórios principais: src/ (implementação core), include/cwf/ (headers públicos), tests/ (suite Google Test), docs/ (especificações e guias de configuração). A implementação física usa elasticidade linear de pequenas deformações com integração temporal implícita Newmark-β e um solucionador PCG matrix-free. Todos os kernels GPU são escritos em Slang e compilados para SPIR-V.",
+      "author": "LukeFrankio"
+    },
+    {
+      "content": "ARCHITECTURE: The system flows from YAML configuration → mesh loading (Gmsh 4.1 format) → CPU preprocessing (gradients, volumes, mass) → GPU buffer upload (SoA layout) → implicit time stepping (Newmark-β) → PCG solve per timestep → post-processing (von Mises stress, VTU export). The GPU layer uses VK_EXT_descriptor_buffer for bindless resources, timeline semaphores for synchronization, and wave64 subgroup operations optimized for AMD RDNA architecture.",
+      "author": "LukeFrankio"
+    },
+    {
+      "content": "ARQUITETURA: O sistema flui de configuração YAML → carregamento de malha (formato Gmsh 4.1) → pré-processamento CPU (gradientes, volumes, massa) → upload de buffers GPU (layout SoA) → integração temporal implícita (Newmark-β) → resolução PCG por timestep → pós-processamento (tensão de von Mises, exportação VTU). A camada GPU usa VK_EXT_descriptor_buffer para recursos bindless, semáforos de timeline para sincronização, e operações de subgrupo wave64 otimizadas para arquitetura AMD RDNA.",
+      "author": "LukeFrankio"
+    },
+    {
+      "content": "SHADER ORGANIZATION: src/shaders/ contains Slang compute kernels: ke_apply_element.slang (element stiffness application: strain→stress→internal forces), ke_gather_node.slang (nodal force assembly), pcg_*.slang (PCG solver stages), newmark_*.slang (time integration), derive_fields.slang (post-processing). Common utilities in common.slang (math, constants), reductions.slang (subgroup ops), bc.slang (boundary conditions).",
+      "author": "LukeFrankio"
+    },
+    {
+      "content": "ORGANIZAÇÃO DOS SHADERS: src/shaders/ contém kernels de computação Slang: ke_apply_element.slang (aplicação de rigidez elementar: deformação→tensão→forças internas), ke_gather_node.slang (montagem de forças nodais), pcg_*.slang (estágios do solucionador PCG), newmark_*.slang (integração temporal), derive_fields.slang (pós-processamento). Utilitários comuns em common.slang (matemática, constantes), reductions.slang (operações de subgrupo), bc.slang (condições de contorno).",
+      "author": "LukeFrankio"
+    },
+    {
+      "content": "GPU CONTEXT: src/gpu/context.cpp implements Vulkan initialization with AMD iGPU preference, VMA memory allocator, staging ring for uploads, and descriptor buffer setup. The PCG solver (src/gpu/pcg.cpp) orchestrates GPU kernels with timeline semaphores. Buffer management (src/gpu/buffers.cpp) handles SoA packing and device-local allocation.",
+      "author": "LukeFrankio"
+    },
+    {
+      "content": "CONTEXTO GPU: src/gpu/context.cpp implementa inicialização Vulkan com preferência por iGPU AMD, alocador de memória VMA, staging ring para uploads, e configuração de descriptor buffer. O solucionador PCG (src/gpu/pcg.cpp) orquestra kernels GPU com semáforos de timeline. O gerenciamento de buffers (src/gpu/buffers.cpp) lida com empacotamento SoA e alocação device-local.",
+      "author": "LukeFrankio"
+    },
+    {
+      "content": "PHYSICS IMPLEMENTATION: Linear elasticity with isotropic materials (E, ν, ρ). Strain tensor ε = sym(∇u), stress σ = D:ε via 6×6 Voigt D-matrix. Rayleigh damping C = α·M + β·K. Implicit Newmark-β (β=0.25, γ=0.5) with effective stiffness K_eff = K + (γ/βΔt)C + (1/βΔt²)M. Matrix-free PCG with block-Jacobi preconditioner.",
+      "author": "LukeFrankio"
+    },
+    {
+      "content": "IMPLEMENTAÇÃO FÍSICA: Elasticidade linear com materiais isotrópicos (E, ν, ρ). Tensor de deformação ε = sym(∇u), tensão σ = D:ε via matriz D de Voigt 6×6. Amortecimento de Rayleigh C = α·M + β·K. Newmark-β implícito (β=0.25, γ=0.5) com rigidez efetiva K_eff = K + (γ/βΔt)C + (1/βΔt²)M. PCG matrix-free com precondicionador block-Jacobi.",
+      "author": "LukeFrankio"
+    }
+  ],
+  "pages": [
+    {
+      "title": "Overview / Visão Geral",
+      "purpose": "[EN] Introduce CiviWave-FEM: GPU-accelerated FEM solver for structural dynamics, targeting AMD iGPUs with Vulkan 1.3 compute, Slang shaders, C++26/GCC 15.2. Explain the architectural philosophy: matrix-free implicit solver, source-first dependencies, wave64 optimization. [PT-BR] Introduzir o CiviWave-FEM: solucionador MEF acelerado por GPU para dinâmica estrutural, direcionado para iGPUs AMD com Vulkan 1.3 compute, shaders Slang, C++26/GCC 15.2. Explicar a filosofia arquitetural: solucionador implícito matrix-free, dependências source-first, otimização wave64.",
+      "page_notes": [
+        {
+          "content": "Key files: README.md, docs/spec.md, docs/plan.md. The project implements linear small-strain elasticity with implicit Newmark-β time integration."
+        }
+      ]
+    },
+    {
+      "title": "Getting Started / Primeiros Passos",
+      "purpose": "[EN] Quick start guide for developers: prerequisites overview, links to detailed setup, first build, and running the cantilever demo. [PT-BR] Guia de início rápido para desenvolvedores: visão geral dos pré-requisitos, links para configuração detalhada, primeira compilação e execução do demo cantilever.",
+      "page_notes": [
+        {
+          "content": "Reference docs/dev-setup-windows.md and docs/dev-setup-linux.md for platform-specific instructions."
+        }
+      ]
+    },
+    {
+      "title": "Development Environment Setup / Configuração do Ambiente de Desenvolvimento",
+      "purpose": "[EN] Platform-specific toolchain installation: GCC 15.2 (MSYS2/MinGW on Windows, native on Linux), CMake 4.1.2, Vulkan SDK 1.3.290+, Slang compiler 2025.x. Environment variables, PATH configuration, verification commands. [PT-BR] Instalação de toolchain específica por plataforma: GCC 15.2 (MSYS2/MinGW no Windows, nativo no Linux), CMake 4.1.2, Vulkan SDK 1.3.290+, compilador Slang 2025.x. Variáveis de ambiente, configuração do PATH, comandos de verificação.",
+      "parent": "Getting Started / Primeiros Passos",
+      "page_notes": [
+        {
+          "content": "Key files: docs/dev-setup-windows.md, docs/dev-setup-linux.md, docs/versions.yaml"
+        }
+      ]
+    },
+    {
+      "title": "Building the Project / Compilando o Projeto",
+      "purpose": "[EN] CMake configuration and build process: presets (default, release, debug), key options (BUILD_UI, ENABLE_TRACY, FORCE_FETCH_DEPS), FetchContent dependency resolution, Slang shader compilation, troubleshooting common errors. [PT-BR] Configuração e processo de compilação CMake: presets (default, release, debug), opções principais (BUILD_UI, ENABLE_TRACY, FORCE_FETCH_DEPS), resolução de dependências FetchContent, compilação de shaders Slang, solução de erros comuns.",
+      "parent": "Getting Started / Primeiros Passos",
+      "page_notes": [
+        {
+          "content": "Key files: CMakeLists.txt, CMakePresets.json, cmake/Modules/*.cmake"
+        }
+      ]
+    },
+    {
+      "title": "Running Your First Simulation / Executando Sua Primeira Simulação",
+      "purpose": "[EN] Tutorial: create a YAML config, load a Gmsh mesh, run simulation with cw-sim or viewer, interpret results. Example with tests/data/cantilever.yaml. [PT-BR] Tutorial: criar uma configuração YAML, carregar uma malha Gmsh, executar simulação com cw-sim ou visualizador, interpretar resultados. Exemplo com tests/data/cantilever.yaml.",
+      "parent": "Getting Started / Primeiros Passos",
+      "page_notes": [
+        {
+          "content": "Key files: tests/data/cantilever.yaml, tests/data/cantilever.msh, src/ui/viewer.cpp"
+        }
+      ]
+    },
+    {
+      "title": "Architecture / Arquitetura",
+      "purpose": "[EN] High-level system architecture: data flow from YAML → mesh preprocessing → GPU execution → post-processing. Component interactions, dependency graph, design principles. [PT-BR] Arquitetura de alto nível do sistema: fluxo de dados de YAML → pré-processamento de malha → execução GPU → pós-processamento. Interações de componentes, grafo de dependências, princípios de design.",
+      "page_notes": [
+        {
+          "content": "Key files: docs/spec.md, include/cwf/*.hpp (public API headers)"
+        }
+      ]
+    },
+    {
+      "title": "System Components Overview / Visão Geral dos Componentes do Sistema",
+      "purpose": "[EN] Major subsystems: config/ (YAML parsing), mesh/ (loading, preprocessing), gpu/ (Vulkan context, buffers, PCG), physics/ (Newmark, solver, loads, materials), post/ (derived fields, export), ui/ (viewer). [PT-BR] Principais subsistemas: config/ (parsing YAML), mesh/ (carregamento, pré-processamento), gpu/ (contexto Vulkan, buffers, PCG), physics/ (Newmark, solver, cargas, materiais), post/ (campos derivados, exportação), ui/ (visualizador).",
+      "parent": "Architecture / Arquitetura",
+      "page_notes": [
+        {
+          "content": "Key directories: src/config/, src/mesh/, src/gpu/, src/physics/, src/post/, src/ui/"
+        }
+      ]
+    },
+    {
+      "title": "Build System Architecture / Arquitetura do Sistema de Build",
+      "purpose": "[EN] CMake structure: root CMakeLists.txt (options, FetchContent), src/CMakeLists.txt (cwf_core library), tests/CMakeLists.txt (test executable). SlangCompile.cmake for shader compilation. Preset configurations. [PT-BR] Estrutura CMake: CMakeLists.txt raiz (opções, FetchContent), src/CMakeLists.txt (biblioteca cwf_core), tests/CMakeLists.txt (executável de teste). SlangCompile.cmake para compilação de shaders. Configurações de preset.",
+      "parent": "Architecture / Arquitetura",
+      "page_notes": [
+        {
+          "content": "Key files: CMakeLists.txt, src/CMakeLists.txt, tests/CMakeLists.txt, cmake/Modules/SlangCompile.cmake, cmake/Modules/FetchDependencies.cmake"
+        }
+      ]
+    },
+    {
+      "title": "Dependency Management / Gerenciamento de Dependências",
+      "purpose": "[EN] Source-first policy: all dependencies built from source via FetchContent for ABI compatibility. Dependencies: yaml-cpp (config), VMA (memory), GoogleTest (testing), ImGui (UI), Tracy (profiling). Version pinning via docs/versions.yaml. [PT-BR] Política source-first: todas as dependências compiladas do código fonte via FetchContent para compatibilidade ABI. Dependências: yaml-cpp (config), VMA (memória), GoogleTest (testes), ImGui (UI), Tracy (profiling). Fixação de versões via docs/versions.yaml.",
+      "parent": "Architecture / Arquitetura",
+      "page_notes": [
+        {
+          "content": "Key files: docs/dependencies.md, docs/versions.yaml, cmake/Modules/FetchDependencies.cmake"
+        }
+      ]
+    },
+    {
+      "title": "GPU Compute Architecture / Arquitetura de Computação GPU",
+      "purpose": "[EN] Vulkan 1.3 compute model: push constants for uniforms, descriptor buffers (VK_EXT_descriptor_buffer) for bindless storage, timeline semaphores for sync. Wave64 subgroup operations, workgroup sizing, memory coalescing strategies for AMD RDNA. [PT-BR] Modelo de computação Vulkan 1.3: push constants para uniformes, descriptor buffers (VK_EXT_descriptor_buffer) para armazenamento bindless, semáforos de timeline para sincronização. Operações de subgrupo Wave64, dimensionamento de workgroup, estratégias de coalescência de memória para AMD RDNA.",
+      "parent": "Architecture / Arquitetura",
+      "page_notes": [
+        {
+          "content": "Key files: src/gpu/context.cpp, include/cwf/gpu/context.hpp, src/shaders/common.slang"
+        }
+      ]
+    },
+    {
+      "title": "Configuration System / Sistema de Configuração",
+      "purpose": "[EN] YAML-based simulation configuration: parsing with yaml-cpp, validation, error reporting, Config struct population. Schema evolution and backward compatibility. [PT-BR] Configuração de simulação baseada em YAML: parsing com yaml-cpp, validação, relatório de erros, preenchimento da struct Config. Evolução de schema e compatibilidade retroativa.",
+      "page_notes": [
+        {
+          "content": "Key files: src/config/config.cpp, include/cwf/config/config.hpp"
+        }
+      ]
+    },
+    {
+      "title": "YAML Schema Reference / Referência do Schema YAML",
+      "purpose": "[EN] Complete YAML field reference: mesh (path), materials (name, E, nu, rho), assignments (group→material), damping (xi, w1, w2), time (dt, adaptive), solver (type, tol, max_iters), loads (gravity, tractions, point_loads, curves), dirichlet (fixes, group, dof), output (vtu_stride, probes). [PT-BR] Referência completa de campos YAML: mesh (path), materials (name, E, nu, rho), assignments (group→material), damping (xi, w1, w2), time (dt, adaptive), solver (type, tol, max_iters), loads (gravity, tractions, point_loads, curves), dirichlet (fixes, group, dof), output (vtu_stride, probes).",
+      "parent": "Configuration System / Sistema de Configuração",
+      "page_notes": [
+        {
+          "content": "Key files: src/config/config.cpp (parsing logic), tests/data/*.yaml (examples)"
+        }
+      ]
+    },
+    {
+      "title": "Material and Assignment System / Sistema de Materiais e Atribuições",
+      "purpose": "[EN] Material definition: isotropic linear elastic (E, ν, ρ). Lamé parameters λ, μ derivation. 6×6 Voigt D-matrix construction. Physical group assignment from mesh to material. [PT-BR] Definição de material: elástico linear isotrópico (E, ν, ρ). Derivação dos parâmetros de Lamé λ, μ. Construção da matriz D de Voigt 6×6. Atribuição de grupo físico da malha ao material.",
+      "parent": "Configuration System / Sistema de Configuração",
+      "page_notes": [
+        {
+          "content": "Key files: include/cwf/physics/materials.hpp, src/mesh/preprocess.cpp (assignment resolution)"
+        }
+      ]
+    },
+    {
+      "title": "Loads and Boundary Conditions / Cargas e Condições de Contorno",
+      "purpose": "[EN] Load types: gravity (body force), surface tractions (pressure on faces), point loads. Time curves for ramping. Dirichlet constraints: fixed DOFs by group, partial constraints (x,y,z selection). [PT-BR] Tipos de carga: gravidade (força de corpo), trações de superfície (pressão em faces), cargas pontuais. Curvas de tempo para rampa. Restrições de Dirichlet: DOFs fixos por grupo, restrições parciais (seleção x,y,z).",
+      "parent": "Configuration System / Sistema de Configuração",
+      "page_notes": [
+        {
+          "content": "Key files: include/cwf/physics/loads.hpp, src/physics/loads.cpp, src/physics/solver.cpp (Dirichlet application)"
+        }
+      ]
+    },
+    {
+      "title": "Mesh Processing Pipeline / Pipeline de Processamento de Malha",
+      "purpose": "[EN] CPU preprocessing flow: Gmsh 4.1 ASCII loading → validation → shape function gradient computation → volume/mass calculation → adjacency structures → SoA buffer packing. [PT-BR] Fluxo de pré-processamento CPU: carregamento ASCII Gmsh 4.1 → validação → cálculo de gradientes de funções de forma → cálculo de volume/massa → estruturas de adjacência → empacotamento de buffers SoA.",
+      "page_notes": [
+        {
+          "content": "Key files: src/mesh/mesh.cpp, src/mesh/preprocess.cpp, include/cwf/mesh/*.hpp"
+        }
+      ]
+    },
+    {
+      "title": "Gmsh Mesh Loading / Carregamento de Malha Gmsh",
+      "purpose": "[EN] Gmsh 4.1 ASCII format parser: $MeshFormat, $PhysicalNames, $Nodes, $Elements sections. Element types supported: tetrahedron (type 4), hexahedron (type 8). Physical groups for boundary conditions. [PT-BR] Parser do formato ASCII Gmsh 4.1: seções $MeshFormat, $PhysicalNames, $Nodes, $Elements. Tipos de elemento suportados: tetraedro (tipo 4), hexaedro (tipo 8). Grupos físicos para condições de contorno.",
+      "parent": "Mesh Processing Pipeline / Pipeline de Processamento de Malha",
+      "page_notes": [
+        {
+          "content": "Key files: src/mesh/mesh.cpp, include/cwf/mesh/mesh.hpp"
+        }
+      ]
+    },
+    {
+      "title": "Mesh Preprocessing / Pré-processamento de Malha",
+      "purpose": "[EN] cwf::mesh::pre::run(): element validation, shape function gradient computation (∇N at integration points), Jacobian and volume calculation, lumped mass assembly, Rayleigh damping coefficients. [PT-BR] cwf::mesh::pre::run(): validação de elementos, cálculo de gradientes de funções de forma (∇N nos pontos de integração), cálculo de Jacobiano e volume, montagem de massa concentrada, coeficientes de amortecimento de Rayleigh.",
+      "parent": "Mesh Processing Pipeline / Pipeline de Processamento de Malha",
+      "page_notes": [
+        {
+          "content": "Key files: src/mesh/preprocess.cpp, include/cwf/mesh/preprocess.hpp"
+        }
+      ]
+    },
+    {
+      "title": "Mesh Packing and Upload / Empacotamento e Upload de Malha",
+      "purpose": "[EN] SoA buffer layout for GPU: positions, velocities, accelerations, forces, gradients, volumes, masses, connectivity. Staging ring buffer for async upload. Device-local allocation via VMA. [PT-BR] Layout de buffer SoA para GPU: posições, velocidades, acelerações, forças, gradientes, volumes, massas, conectividade. Staging ring buffer para upload assíncrono. Alocação device-local via VMA.",
+      "parent": "Mesh Processing Pipeline / Pipeline de Processamento de Malha",
+      "page_notes": [
+        {
+          "content": "Key files: src/gpu/buffers.cpp, include/cwf/gpu/buffers.hpp"
+        }
+      ]
+    },
+    {
+      "title": "Math Utilities / Utilitários Matemáticos",
+      "purpose": "[EN] Vector math for preprocessing: Vec3 struct, dot product, cross product, magnitude, safe_normalize. Used in gradient computation, normal calculation, volume integration. [PT-BR] Matemática vetorial para pré-processamento: struct Vec3, produto escalar, produto vetorial, magnitude, safe_normalize. Usado em cálculo de gradientes, cálculo de normais, integração de volume.",
+      "parent": "Mesh Processing Pipeline / Pipeline de Processamento de Malha",
+      "page_notes": [
+        {
+          "content": "Key files: include/cwf/mesh/preprocess.hpp (Vec3 utilities), src/shaders/common.slang (GPU math)"
+        }
+      ]
+    },
+    {
+      "title": "GPU Execution Layer / Camada de Execução GPU",
+      "purpose": "[EN] Vulkan compute execution: context initialization, pipeline creation, command buffer recording, kernel dispatch, synchronization with timeline semaphores. [PT-BR] Execução de computação Vulkan: inicialização de contexto, criação de pipeline, gravação de command buffer, dispatch de kernel, sincronização com semáforos de timeline.",
+      "page_notes": [
+        {
+          "content": "Key files: src/gpu/context.cpp, src/gpu/pcg.cpp, include/cwf/gpu/*.hpp"
+        }
+      ]
+    },
+    {
+      "title": "Vulkan Context Initialization / Inicialização do Contexto Vulkan",
+      "purpose": "[EN] VulkanContext::create(): instance with validation layers, physical device selection (AMD iGPU preference via vendor ID 0x1002), logical device with compute queue, VK_EXT_descriptor_buffer extension, VMA allocator setup, staging ring allocation. [PT-BR] VulkanContext::create(): instância com camadas de validação, seleção de dispositivo físico (preferência por iGPU AMD via vendor ID 0x1002), dispositivo lógico com fila de computação, extensão VK_EXT_descriptor_buffer, configuração do alocador VMA, alocação do staging ring.",
+      "parent": "GPU Execution Layer / Camada de Execução GPU",
+      "page_notes": [
+        {
+          "content": "Key files: src/gpu/context.cpp, include/cwf/gpu/context.hpp"
+        }
+      ]
+    },
+    {
+      "title": "Device Buffer Management / Gerenciamento de Buffers de Dispositivo",
+      "purpose": "[EN] GPU memory strategy: device-local buffers for simulation data, host-visible staging ring for uploads, descriptor buffer for bindless access. Buffer sharding for large meshes. [PT-BR] Estratégia de memória GPU: buffers device-local para dados de simulação, staging ring host-visible para uploads, descriptor buffer para acesso bindless. Sharding de buffers para malhas grandes.",
+      "parent": "GPU Execution Layer / Camada de Execução GPU",
+      "page_notes": [
+        {
+          "content": "Key files: src/gpu/buffers.cpp, include/cwf/gpu/buffers.hpp"
+        }
+      ]
+    },
+    {
+      "title": "Timeline Semaphores and Synchronization / Semáforos de Timeline e Sincronização",
+      "purpose": "[EN] Vulkan 1.2 timeline semaphores for CPU-GPU coordination: wait on CPU for GPU completion, signal increments after kernel dispatch, dependency chains between PCG iterations. [PT-BR] Semáforos de timeline Vulkan 1.2 para coordenação CPU-GPU: espera na CPU pela conclusão da GPU, incrementos de sinal após dispatch de kernel, cadeias de dependência entre iterações PCG.",
+      "parent": "GPU Execution Layer / Camada de Execução GPU",
+      "page_notes": [
+        {
+          "content": "Key files: src/gpu/pcg.cpp (synchronization logic), src/gpu/context.cpp (semaphore creation)"
+        }
+      ]
+    },
+    {
+      "title": "Shader System / Sistema de Shaders",
+      "purpose": "[EN] Slang shader architecture: .slang source files, compilation to SPIR-V via slangc, CMake integration, runtime loading. Shader organization by function: element kernels, solver kernels, time integration, post-processing. [PT-BR] Arquitetura de shaders Slang: arquivos fonte .slang, compilação para SPIR-V via slangc, integração CMake, carregamento em runtime. Organização de shaders por função: kernels de elemento, kernels de solver, integração temporal, pós-processamento.",
+      "page_notes": [
+        {
+          "content": "Key files: src/shaders/*.slang, cmake/Modules/SlangCompile.cmake"
+        }
+      ]
+    },
+    {
+      "title": "Slang Shader Compilation / Compilação de Shaders Slang",
+      "purpose": "[EN] SlangCompile.cmake: find slangc executable, define compilation rules, set target profiles (spirv_1_5), generate SPIR-V to build/shaders/. Build-time compilation, dependency tracking. [PT-BR] SlangCompile.cmake: encontrar executável slangc, definir regras de compilação, definir perfis de destino (spirv_1_5), gerar SPIR-V para build/shaders/. Compilação em tempo de build, rastreamento de dependências.",
+      "parent": "Shader System / Sistema de Shaders",
+      "page_notes": [
+        {
+          "content": "Key files: cmake/Modules/SlangCompile.cmake, src/CMakeLists.txt (shader target)"
+        }
+      ]
+    },
+    {
+      "title": "Compute Kernel Architecture / Arquitetura de Kernels de Computação",
+      "purpose": "[EN] GPU kernel organization: ke_apply_element (B^T D B u per element), ke_gather_node (scatter-add to nodes), pcg_* (CG solver stages), newmark_* (time integration), derive_fields (post-processing). Workgroup sizing: 64 threads (wave64). [PT-BR] Organização de kernels GPU: ke_apply_element (B^T D B u por elemento), ke_gather_node (scatter-add para nós), pcg_* (estágios do solver CG), newmark_* (integração temporal), derive_fields (pós-processamento). Dimensionamento de workgroup: 64 threads (wave64).",
+      "parent": "Shader System / Sistema de Shaders",
+      "page_notes": [
+        {
+          "content": "Key files: src/shaders/ke_apply_element.slang, src/shaders/ke_gather_node.slang, src/shaders/pcg_*.slang, src/shaders/newmark_*.slang, src/shaders/derive_fields.slang"
+        }
+      ]
+    },
+    {
+      "title": "Element Stiffness Kernels / Kernels de Rigidez de Elemento",
+      "purpose": "[EN] ke_apply_element.slang: compute strain ε = B·u from nodal displacements, stress σ = D·ε via material D-matrix, internal force f_int = B^T·σ. Linear small-strain formulation. ke_gather_node.slang: atomic scatter-add element forces to global node vector. [PT-BR] ke_apply_element.slang: calcular deformação ε = B·u a partir de deslocamentos nodais, tensão σ = D·ε via matriz D do material, força interna f_int = B^T·σ. Formulação linear de pequenas deformações. ke_gather_node.slang: scatter-add atômico das forças de elemento para vetor global de nós.",
+      "parent": "Shader System / Sistema de Shaders",
+      "page_notes": [
+        {
+          "content": "Key files: src/shaders/ke_apply_element.slang, src/shaders/ke_gather_node.slang"
+        }
+      ]
+    },
+    {
+      "title": "PCG Solver Kernels / Kernels do Solver PCG",
+      "purpose": "[EN] Preconditioned Conjugate Gradient on GPU: pcg_precondition (block-Jacobi M^-1), pcg_dot_partials (FP64 partial sums), pcg_reduce_final (final reduction for α, β), pcg_axpy (vector updates x += α·p), pcg_enforce_dirichlet (zero constrained DOFs). [PT-BR] Gradiente Conjugado Precondicionado na GPU: pcg_precondition (M^-1 block-Jacobi), pcg_dot_partials (somas parciais FP64), pcg_reduce_final (redução final para α, β), pcg_axpy (atualizações de vetor x += α·p), pcg_enforce_dirichlet (zerar DOFs restringidos).",
+      "parent": "Shader System / Sistema de Shaders",
+      "page_notes": [
+        {
+          "content": "Key files: src/shaders/pcg_precondition.slang, src/shaders/pcg_dot_partials.slang, src/shaders/pcg_reduce_final.slang, src/shaders/pcg_axpy.slang, src/shaders/pcg_enforce_dirichlet.slang"
+        }
+      ]
+    },
+    {
+      "title": "Time Integration Kernels / Kernels de Integração Temporal",
+      "purpose": "[EN] Newmark-β GPU implementation: newmark_predictor.slang (predict u, v, a), newmark_update.slang (correct after PCG solve). Implicit average acceleration method (β=0.25, γ=0.5). [PT-BR] Implementação GPU de Newmark-β: newmark_predictor.slang (prever u, v, a), newmark_update.slang (corrigir após solução PCG). Método implícito de aceleração média (β=0.25, γ=0.5).",
+      "parent": "Shader System / Sistema de Shaders",
+      "page_notes": [
+        {
+          "content": "Key files: src/shaders/newmark_predictor.slang, src/shaders/newmark_update.slang"
+        }
+      ]
+    },
+    {
+      "title": "Shader Utilities and Common Code / Utilitários e Código Comum de Shaders",
+      "purpose": "[EN] Shared shader infrastructure: common.slang (vec3 math, constants, CW_WAVE_SIZE), reductions.slang (subgroupAdd, subgroupMax for wave64), bc.slang (Dirichlet mask lookup). Descriptor set layouts for uniform access. [PT-BR] Infraestrutura compartilhada de shaders: common.slang (matemática vec3, constantes, CW_WAVE_SIZE), reductions.slang (subgroupAdd, subgroupMax para wave64), bc.slang (lookup de máscara Dirichlet). Layouts de descriptor set para acesso uniforme.",
+      "parent": "Shader System / Sistema de Shaders",
+      "page_notes": [
+        {
+          "content": "Key files: src/shaders/common.slang, src/shaders/reductions.slang, src/shaders/bc.slang"
+        }
+      ]
+    },
+    {
+      "title": "Physics Solvers / Solucionadores Físicos",
+      "purpose": "[EN] Implicit FEM solver implementation: matrix-free approach (no global K assembly), Newmark-β time integration, PCG iterative solver with block-Jacobi preconditioner. CPU orchestration with GPU compute kernels. [PT-BR] Implementação do solucionador MEF implícito: abordagem matrix-free (sem montagem global de K), integração temporal Newmark-β, solucionador iterativo PCG com precondicionador block-Jacobi. Orquestração CPU com kernels de computação GPU.",
+      "page_notes": [
+        {
+          "content": "Key files: src/physics/solver.cpp, src/physics/newmark.cpp, src/gpu/pcg.cpp"
+        }
+      ]
+    },
+    {
+      "title": "Linear Elasticity Formulation / Formulação de Elasticidade Linear",
+      "purpose": "[EN] Small-strain linear elasticity: strain tensor ε = ½(∇u + ∇u^T), stress σ = D:ε with isotropic D-matrix from Lamé parameters. Voigt notation (6-component vectors). NOT corotational - assumes small rotations. [PT-BR] Elasticidade linear de pequenas deformações: tensor de deformação ε = ½(∇u + ∇u^T), tensão σ = D:ε com matriz D isotrópica dos parâmetros de Lamé. Notação de Voigt (vetores de 6 componentes). NÃO é corotacional - assume pequenas rotações.",
+      "parent": "Physics Solvers / Solucionadores Físicos",
+      "page_notes": [
+        {
+          "content": "Key files: include/cwf/physics/materials.hpp (D-matrix), src/shaders/ke_apply_element.slang (strain computation)"
+        }
+      ]
+    },
+    {
+      "title": "Newmark Time Integration / Integração Temporal de Newmark",
+      "purpose": "[EN] Newmark-β method: implicit average acceleration (β=0.25, γ=0.5). Predictor stage: estimate u, v, a. Solve for Δu: K_eff·Δu = R_eff. Corrector: update u, v, a. CPU code in physics/newmark.cpp, GPU kernels in newmark_*.slang. [PT-BR] Método Newmark-β: aceleração média implícita (β=0.25, γ=0.5). Estágio preditor: estimar u, v, a. Resolver para Δu: K_eff·Δu = R_eff. Corretor: atualizar u, v, a. Código CPU em physics/newmark.cpp, kernels GPU em newmark_*.slang.",
+      "parent": "Physics Solvers / Solucionadores Físicos",
+      "page_notes": [
+        {
+          "content": "Key files: src/physics/newmark.cpp, include/cwf/physics/newmark.hpp, src/shaders/newmark_predictor.slang, src/shaders/newmark_update.slang"
+        }
+      ]
+    },
+    {
+      "title": "PCG Iterative Solver / Solucionador Iterativo PCG",
+      "purpose": "[EN] Preconditioned Conjugate Gradient: matrix-free K·x via element kernels, block-Jacobi preconditioner (diagonal 3×3 blocks), FP64 reductions for numerical stability, relative tolerance convergence (||r|| < tol·||r₀||). [PT-BR] Gradiente Conjugado Precondicionado: K·x matrix-free via kernels de elemento, precondicionador block-Jacobi (blocos diagonais 3×3), reduções FP64 para estabilidade numérica, convergência por tolerância relativa (||r|| < tol·||r₀||).",
+      "parent": "Physics Solvers / Solucionadores Físicos",
+      "page_notes": [
+        {
+          "content": "Key files: src/gpu/pcg.cpp, include/cwf/gpu/pcg.hpp, src/shaders/pcg_*.slang"
+        }
+      ]
+    },
+    {
+      "title": "Dirichlet Boundary Conditions / Condições de Contorno de Dirichlet",
+      "purpose": "[EN] Fixed DOF enforcement: identify constrained nodes from mesh groups, build DOF mask, apply to effective stiffness (diagonal 1, off-diagonal 0), zero RHS entries, enforce in PCG iterations. [PT-BR] Aplicação de DOFs fixos: identificar nós restringidos dos grupos de malha, construir máscara de DOF, aplicar à rigidez efetiva (diagonal 1, fora-diagonal 0), zerar entradas do RHS, aplicar nas iterações PCG.",
+      "parent": "Physics Solvers / Solucionadores Físicos",
+      "page_notes": [
+        {
+          "content": "Key files: src/physics/solver.cpp (DirichletConditions), src/shaders/pcg_enforce_dirichlet.slang"
+        }
+      ]
+    },
+    {
+      "title": "Load Assembly / Montagem de Cargas",
+      "purpose": "[EN] External force vector assembly: gravity (ρ·g·V per node), surface tractions (pressure integrated over element faces), point loads. Time curve scaling for ramped/cyclic loads. [PT-BR] Montagem do vetor de forças externas: gravidade (ρ·g·V por nó), trações de superfície (pressão integrada sobre faces de elemento), cargas pontuais. Escalonamento por curva de tempo para cargas em rampa/cíclicas.",
+      "parent": "Physics Solvers / Solucionadores Físicos",
+      "page_notes": [
+        {
+          "content": "Key files: src/physics/loads.cpp, include/cwf/physics/loads.hpp"
+        }
+      ]
+    },
+    {
+      "title": "Post-Processing and Derived Fields / Pós-processamento e Campos Derivados",
+      "purpose": "[EN] Derived quantity computation: displacement magnitude, von Mises stress (from σ tensor), principal stresses, strain energy. GPU kernel derive_fields.slang. CPU export to VTU (ParaView compatible). [PT-BR] Cálculo de quantidades derivadas: magnitude de deslocamento, tensão de von Mises (do tensor σ), tensões principais, energia de deformação. Kernel GPU derive_fields.slang. Exportação CPU para VTU (compatível com ParaView).",
+      "parent": "Physics Solvers / Solucionadores Físicos",
+      "page_notes": [
+        {
+          "content": "Key files: src/post/derived.cpp, include/cwf/post/derived.hpp, src/post/export.cpp, src/shaders/derive_fields.slang"
+        }
+      ]
+    },
+    {
+      "title": "Viewer and Visualization / Visualizador e Visualização",
+      "purpose": "[EN] Real-time viewer: Vulkan rendering pipeline, ImGui controls, mesh rendering with stress coloring, deformation visualization, camera controls, hot-reload of configurations. [PT-BR] Visualizador em tempo real: pipeline de renderização Vulkan, controles ImGui, renderização de malha com coloração de tensão, visualização de deformação, controles de câmera, hot-reload de configurações.",
+      "page_notes": [
+        {
+          "content": "Key files: src/ui/viewer.cpp, include/cwf/ui/viewer.hpp"
+        }
+      ]
+    },
+    {
+      "title": "Viewer Architecture / Arquitetura do Visualizador",
+      "purpose": "[EN] VulkanViewer class: Vulkan swapchain management, graphics pipeline (vertex/fragment shaders), mesh buffer uploads, ImGui integration, event handling. Separate from compute context. [PT-BR] Classe VulkanViewer: gerenciamento de swapchain Vulkan, pipeline gráfico (shaders vertex/fragment), upload de buffers de malha, integração ImGui, tratamento de eventos. Separado do contexto de computação.",
+      "parent": "Viewer and Visualization / Visualizador e Visualização",
+      "page_notes": [
+        {
+          "content": "Key files: src/ui/viewer.cpp (VulkanViewer class, ~4000 lines)"
+        }
+      ]
+    },
+    {
+      "title": "Viewer Controls and UI / Controles e Interface do Visualizador",
+      "purpose": "[EN] ImGui control panels: mesh settings, deformation controls, stress visualization, overlay highlights (edges, vertices), debug options. Configuration dropdown with hot-reload support. [PT-BR] Painéis de controle ImGui: configurações de malha, controles de deformação, visualização de tensão, overlays de destaque (arestas, vértices), opções de debug. Dropdown de configuração com suporte a hot-reload.",
+      "parent": "Viewer and Visualization / Visualizador e Visualização",
+      "page_notes": [
+        {
+          "content": "Key files: src/ui/viewer.cpp (draw_ui method, ImGui panels)"
+        }
+      ]
+    },
+    {
+      "title": "Hot-Reload System / Sistema de Hot-Reload",
+      "purpose": "[EN] Configuration hot-reload: scan for YAML files, reload_from_config() method, mesh reloading, solver re-initialization, camera fitting. Path resolution strategies for relative mesh paths. [PT-BR] Hot-reload de configuração: varredura de arquivos YAML, método reload_from_config(), recarregamento de malha, reinicialização do solver, ajuste de câmera. Estratégias de resolução de caminho para paths relativos de malha.",
+      "parent": "Viewer and Visualization / Visualizador e Visualização",
+      "page_notes": [
+        {
+          "content": "Key files: src/ui/viewer.cpp (reload_from_config, scan_config_files methods)"
+        }
+      ]
+    },
+    {
+      "title": "Testing Framework / Framework de Testes",
+      "purpose": "[EN] Google Test integration: unit tests for all modules, validation tests against analytical solutions, test data in tests/data/. CMake test discovery and CTest integration. [PT-BR] Integração Google Test: testes unitários para todos os módulos, testes de validação contra soluções analíticas, dados de teste em tests/data/. Descoberta de testes CMake e integração CTest.",
+      "page_notes": [
+        {
+          "content": "Key files: tests/CMakeLists.txt, tests/*_test.cpp, tests/data/*.yaml"
+        }
+      ]
+    },
+    {
+      "title": "Unit Tests / Testes Unitários",
+      "purpose": "[EN] Module tests: config_validation_test (YAML parsing), mesh_loader_test (Gmsh loading), preprocess_test (gradient/volume computation), pcg_test (solver convergence), newmark_stepper_test (time integration). [PT-BR] Testes de módulo: config_validation_test (parsing YAML), mesh_loader_test (carregamento Gmsh), preprocess_test (cálculo de gradiente/volume), pcg_test (convergência do solver), newmark_stepper_test (integração temporal).",
+      "parent": "Testing Framework / Framework de Testes",
+      "page_notes": [
+        {
+          "content": "Key files: tests/config_validation_test.cpp, tests/mesh_loader_test.cpp, tests/preprocess_test.cpp, tests/pcg_test.cpp, tests/newmark_stepper_test.cpp"
+        }
+      ]
+    },
+    {
+      "title": "Validation Tests / Testes de Validação",
+      "purpose": "[EN] Analytical validation: cantilever beam (Euler-Bernoulli), block compression, plate bending. Compare FEM results against closed-form solutions with tolerance bounds. [PT-BR] Validação analítica: viga em balanço (Euler-Bernoulli), compressão de bloco, flexão de placa. Comparar resultados MEF contra soluções em forma fechada com limites de tolerância.",
+      "parent": "Testing Framework / Framework de Testes",
+      "page_notes": [
+        {
+          "content": "Key files: tests/validation_test.cpp, tests/data/beam_validation.yaml, tests/data/block_validation.yaml, tests/data/plate_validation.yaml, docs/validation.md"
+        }
+      ]
+    },
+    {
+      "title": "Contributing / Contribuindo",
+      "purpose": "[EN] Contribution guidelines: code style (clang-format), PR process, testing requirements, documentation standards. Branch strategy and commit conventions. [PT-BR] Diretrizes de contribuição: estilo de código (clang-format), processo de PR, requisitos de teste, padrões de documentação. Estratégia de branches e convenções de commit.",
+      "page_notes": [
+        {
+          "content": "Key files: CONTRIBUTING.md, CODE_OF_CONDUCT.md, .clang-format, .clang-tidy"
+        }
+      ]
+    },
+    {
+      "title": "Code Style and Standards / Estilo de Código e Padrões",
+      "purpose": "[EN] C++26 style: modern idioms, std::expected for errors, ranges/views, modules (future). Clang-format configuration, clang-tidy checks. Naming conventions (snake_case functions, PascalCase types). [PT-BR] Estilo C++26: idiomas modernos, std::expected para erros, ranges/views, módulos (futuro). Configuração clang-format, verificações clang-tidy. Convenções de nomenclatura (snake_case funções, PascalCase tipos).",
+      "parent": "Contributing / Contribuindo",
+      "page_notes": [
+        {
+          "content": "Key files: .clang-format, .clang-tidy, docs/extensions.md"
+        }
+      ]
+    },
+    {
+      "title": "Future Roadmap / Roadmap Futuro",
+      "purpose": "[EN] Planned features: corotational formulation (moderate rotations), adaptive time stepping, multi-GPU support, mesh refinement, plasticity models. Performance optimization targets. [PT-BR] Funcionalidades planejadas: formulação corotacional (rotações moderadas), passo de tempo adaptativo, suporte multi-GPU, refinamento de malha, modelos de plasticidade. Metas de otimização de desempenho.",
+      "page_notes": [
+        {
+          "content": "Key files: docs/plan.md, RefDocs/TODO.md"
+        }
+      ]
+    }
+  ]
+}
