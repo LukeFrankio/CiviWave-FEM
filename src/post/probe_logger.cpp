@@ -21,24 +21,21 @@ namespace
     return err;
 }
 
-[[nodiscard]] auto serialize_row(std::uint32_t frame,
-                                 double time,
-                                 std::uint32_t node,
-                                 const mesh::pack::PackingResult &packing,
-                                 const DerivedFieldSet &derived) -> std::string
+[[nodiscard]] auto serialize_row(std::uint32_t frame, double time, std::uint32_t node,
+                                 const mesh::pack::PackingResult &packing, const DerivedFieldSet &derived)
+    -> std::string
 {
     std::ostringstream oss;
     oss.setf(std::ios::fixed, std::ios::floatfield);
     oss.precision(9);
 
-    const auto &disp = packing.buffers.nodes.displacement;
-    const auto &vel = packing.buffers.nodes.velocity;
-    const auto &acc = packing.buffers.nodes.acceleration;
+    const auto &disp  = packing.buffers.nodes.displacement;
+    const auto &vel   = packing.buffers.nodes.velocity;
+    const auto &acc   = packing.buffers.nodes.acceleration;
     const auto &field = derived.nodes[node];
 
-    oss << frame << ',' << time << ',' << node << ','
-        << disp.x[node] << ',' << disp.y[node] << ',' << disp.z[node] << ','
-        << vel.x[node] << ',' << vel.y[node] << ',' << vel.z[node] << ','
+    oss << frame << ',' << time << ',' << node << ',' << disp.x[node] << ',' << disp.y[node] << ','
+        << disp.z[node] << ',' << vel.x[node] << ',' << vel.y[node] << ',' << vel.z[node] << ','
         << acc.x[node] << ',' << acc.y[node] << ',' << acc.z[node];
 
     for (std::size_t c = 0; c < 6U; ++c)
@@ -58,8 +55,7 @@ namespace
 
 ProbeLogger::ProbeLogger(std::filesystem::path path, std::vector<std::uint32_t> probes)
     : path_{std::move(path)}, probes_{std::move(probes)}
-{
-}
+{}
 
 [[nodiscard]] auto ProbeLogger::write_header() -> std::expected<void, ProbeError>
 {
@@ -87,8 +83,7 @@ ProbeLogger::ProbeLogger(std::filesystem::path path, std::vector<std::uint32_t> 
     return {};
 }
 
-[[nodiscard]] auto ProbeLogger::log_frame(double simulation_time,
-                                          std::uint32_t frame_index,
+[[nodiscard]] auto ProbeLogger::log_frame(double simulation_time, std::uint32_t frame_index,
                                           const mesh::pack::PackingResult &packing,
                                           const DerivedFieldSet &derived) -> std::expected<void, ProbeError>
 {

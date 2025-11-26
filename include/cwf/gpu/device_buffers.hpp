@@ -13,9 +13,8 @@
 #include <string_view>
 #include <unordered_map>
 #include <vector>
-
-#include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
+#include <vulkan/vulkan.h>
 
 #include "cwf/gpu/buffers.hpp"
 #include "cwf/gpu/sharding.hpp"
@@ -36,14 +35,14 @@ struct BufferSlice
 
 class DeviceBufferArena
 {
-public:
+  public:
     DeviceBufferArena() = default;
 
     static auto create(const VulkanContext &context, const mesh::pack::PackingResult &packing,
                        std::span<const physics::materials::ElasticProperties> materials)
         -> std::expected<DeviceBufferArena, VulkanError>;
 
-    DeviceBufferArena(const DeviceBufferArena &)            = delete;
+    DeviceBufferArena(const DeviceBufferArena &)                     = delete;
     auto operator=(const DeviceBufferArena &) -> DeviceBufferArena & = delete;
 
     DeviceBufferArena(DeviceBufferArena &&other) noexcept;
@@ -54,9 +53,12 @@ public:
     [[nodiscard]] auto has_slice(std::string_view name) const noexcept -> bool;
     [[nodiscard]] auto slice(std::string_view name) const -> const BufferSlice &;
 
-    [[nodiscard]] auto context() const noexcept -> const VulkanContext & { return *context_; }
+    [[nodiscard]] auto context() const noexcept -> const VulkanContext &
+    {
+        return *context_;
+    }
 
-private:
+  private:
     struct TransparentHash
     {
         using is_transparent = void;
@@ -114,13 +116,13 @@ private:
 
     struct DeviceBuffer
     {
-        VkBuffer     buffer{VK_NULL_HANDLE};
+        VkBuffer      buffer{VK_NULL_HANDLE};
         VmaAllocation allocation{nullptr};
-        VkDeviceSize size{0U};
+        VkDeviceSize  size{0U};
     };
 
-    const VulkanContext *context_{nullptr};
-    std::vector<DeviceBuffer> device_buffers_;
+    const VulkanContext                                                            *context_{nullptr};
+    std::vector<DeviceBuffer>                                                       device_buffers_;
     std::unordered_map<std::string, BufferSlice, TransparentHash, TransparentEqual> slices_;
 
     [[nodiscard]] static auto upload_schedule(const VulkanContext &context, VkCommandBuffer cmd,

@@ -93,7 +93,7 @@ namespace
     -> std::unordered_set<std::uint32_t>
 {
     std::unordered_set<std::uint32_t> nodes;
-    
+
     // Collect from surfaces
     const auto surf_iter = mesh.surface_groups.find(group_id);
     if (surf_iter != mesh.surface_groups.end())
@@ -306,7 +306,7 @@ inline void apply_dirichlet(std::vector<double> &matrix, std::vector<double> &rh
                             const DirichletConditions &conditions, const newmark::State &state)
 {
     const std::size_t n = rhs.size();
-    
+
     // First pass: modify RHS for non-constrained DOFs
     // (must happen before zeroing the matrix)
     for (std::size_t dof = 0; dof < n; ++dof)
@@ -315,9 +315,9 @@ inline void apply_dirichlet(std::vector<double> &matrix, std::vector<double> &rh
         {
             continue;
         }
-        
+
         const double target_increment = conditions.targets[dof] - state.displacement[dof];
-        
+
         // Modify RHS for other (non-constrained) DOFs
         for (std::size_t row = 0; row < n; ++row)
         {
@@ -327,7 +327,7 @@ inline void apply_dirichlet(std::vector<double> &matrix, std::vector<double> &rh
             }
         }
     }
-    
+
     // Second pass: zero out rows/columns and set diagonal
     for (std::size_t dof = 0; dof < n; ++dof)
     {
@@ -335,13 +335,13 @@ inline void apply_dirichlet(std::vector<double> &matrix, std::vector<double> &rh
         {
             continue;
         }
-        
+
         const double target_increment = conditions.targets[dof] - state.displacement[dof];
-        
+
         // Get the original diagonal value before zeroing
         const double diag_value = matrix[dof * n + dof];
-        const double scale = (std::abs(diag_value) > 1.0e-30) ? diag_value : 1.0;
-        
+        const double scale      = (std::abs(diag_value) > 1.0e-30) ? diag_value : 1.0;
+
         // Zero out row and column
         for (std::size_t col = 0; col < n; ++col)
         {
@@ -351,10 +351,10 @@ inline void apply_dirichlet(std::vector<double> &matrix, std::vector<double> &rh
         {
             matrix[row * n + dof] = 0.0;
         }
-        
+
         // Set diagonal to maintain scale (use original value, not 1.0!)
         matrix[dof * n + dof] = scale;
-        rhs[dof] = scale * target_increment;
+        rhs[dof]              = scale * target_increment;
     }
 }
 

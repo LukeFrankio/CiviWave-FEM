@@ -41,15 +41,15 @@ namespace
  * without extra allocations. no mutation of @p buffers occurs because purity is
  * law uwu.
  */
-[[nodiscard]] auto build_upload_schedule(const shard::ShardedLayout &layout,
-                                         const std::vector<BufferView> &buffers,
-                                         const StagingConfig staging) -> std::expected<UploadSchedule, UploadError>
+[[nodiscard]] auto build_upload_schedule(const shard::ShardedLayout    &layout,
+                                         const std::vector<BufferView> &buffers, const StagingConfig staging)
+    -> std::expected<UploadSchedule, UploadError>
 {
     if ((staging.chunk_bytes == 0U) || (staging.alignment == 0U) || !std::has_single_bit(staging.alignment))
     {
         return std::unexpected(UploadError{"invalid staging configuration",
-                             {"chunk_bytes=" + std::to_string(staging.chunk_bytes),
-                              "alignment=" + std::to_string(staging.alignment)}});
+                                           {"chunk_bytes=" + std::to_string(staging.chunk_bytes),
+                                            "alignment=" + std::to_string(staging.alignment)}});
     }
 
     UploadSchedule schedule{};
@@ -88,14 +88,14 @@ namespace
                                                 "buffer_size=" + std::to_string(buffer_span.size())}});
         }
 
-        const auto data_begin = buffer_span.subspan(segment.source_offset, segment.size_bytes);
-        std::size_t consumed = 0U;
+        const auto  data_begin = buffer_span.subspan(segment.source_offset, segment.size_bytes);
+        std::size_t consumed   = 0U;
 
         while (consumed < segment.size_bytes)
         {
-            const auto remaining = segment.size_bytes - consumed;
+            const auto remaining     = segment.size_bytes - consumed;
             const auto aligned_chunk = align_up(std::min(remaining, staging.chunk_bytes), staging.alignment);
-            const auto chunk_size = std::min(aligned_chunk, remaining);
+            const auto chunk_size    = std::min(aligned_chunk, remaining);
 
             const auto chunk_span = data_begin.subspan(consumed, chunk_size);
 

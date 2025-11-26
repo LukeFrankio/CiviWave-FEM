@@ -36,7 +36,6 @@
 #include <string_view>
 #include <utility>
 #include <vector>
-
 #include <vulkan/vulkan.h>
 
 struct VmaAllocator_T;
@@ -57,8 +56,8 @@ namespace cwf::gpu
  */
 struct VulkanError
 {
-    std::string              message;  ///< human readable summary with gen-z energy
-    std::vector<std::string> context;  ///< breadcrumb trail (API, stage, etc.)
+    std::string              message;            ///< human readable summary with gen-z energy
+    std::vector<std::string> context;            ///< breadcrumb trail (API, stage, etc.)
     VkResult                 result{VK_SUCCESS}; ///< raw VkResult for debugging / RGP correlation
 };
 
@@ -70,14 +69,15 @@ struct VulkanError
  */
 struct DescriptorSupport
 {
-    bool         descriptor_buffer{false};              ///< whether VK_EXT_descriptor_buffer is enabled
-    bool         descriptor_buffer_push_descriptors{false}; ///< push descriptor writes via buffer
-    bool         descriptor_indexing{false};            ///< descriptor indexing feature availability
-    std::uint32_t max_descriptor_buffer_bindings{0U};   ///< number of descriptor buffer bindings supported
+    bool          descriptor_buffer{false};                  ///< whether VK_EXT_descriptor_buffer is enabled
+    bool          descriptor_buffer_push_descriptors{false}; ///< push descriptor writes via buffer
+    bool          descriptor_indexing{false};                ///< descriptor indexing feature availability
+    std::uint32_t max_descriptor_buffer_bindings{0U}; ///< number of descriptor buffer bindings supported
     std::uint32_t max_resource_descriptor_buffer_bindings{0U}; ///< resource descriptor buffer binding slots
     std::uint32_t max_sampler_descriptor_buffer_bindings{0U};  ///< sampler descriptor buffer binding slots
-    VkDeviceSize  descriptor_buffer_address_space_size{0U};    ///< total address space exposed for descriptor buffers
-    VkDeviceSize  descriptor_buffer_offset_alignment{0U};      ///< alignment requirement for descriptor buffers
+    VkDeviceSize  descriptor_buffer_address_space_size{
+        0U}; ///< total address space exposed for descriptor buffers
+    VkDeviceSize descriptor_buffer_offset_alignment{0U}; ///< alignment requirement for descriptor buffers
 };
 
 /**
@@ -102,13 +102,13 @@ struct QueueInfo
  */
 struct DeviceSummary
 {
-    std::string   name;               ///< UTF-8 device name from VkPhysicalDeviceProperties
-    std::uint32_t api_version{0U};    ///< `VK_MAKE_API_VERSION` encoded API level supported
-    std::uint32_t driver_version{0U}; ///< driver version straight from the driver
+    std::string          name;               ///< UTF-8 device name from VkPhysicalDeviceProperties
+    std::uint32_t        api_version{0U};    ///< `VK_MAKE_API_VERSION` encoded API level supported
+    std::uint32_t        driver_version{0U}; ///< driver version straight from the driver
     VkPhysicalDeviceType type{VK_PHYSICAL_DEVICE_TYPE_OTHER}; ///< GPU type classification
-    std::uint32_t vendor_id{0U};      ///< PCI vendor ID (expect 0x1002 for AMD iGPU)
-    std::uint32_t device_id{0U};      ///< PCI device id, handy for logs
-    VkPhysicalDevice physical_device{VK_NULL_HANDLE}; ///< raw handle for advanced queries
+    std::uint32_t        vendor_id{0U};                       ///< PCI vendor ID (expect 0x1002 for AMD iGPU)
+    std::uint32_t        device_id{0U};                       ///< PCI device id, handy for logs
+    VkPhysicalDevice     physical_device{VK_NULL_HANDLE};     ///< raw handle for advanced queries
 };
 
 /**
@@ -119,12 +119,12 @@ struct DeviceSummary
  */
 class TimelineSemaphore
 {
-public:
+  public:
     TimelineSemaphore() = default;
 
     TimelineSemaphore(VkDevice device, VkSemaphore handle) noexcept;
 
-    TimelineSemaphore(const TimelineSemaphore &)            = delete;
+    TimelineSemaphore(const TimelineSemaphore &)                     = delete;
     auto operator=(const TimelineSemaphore &) -> TimelineSemaphore & = delete;
 
     TimelineSemaphore(TimelineSemaphore &&other) noexcept;
@@ -132,7 +132,10 @@ public:
 
     ~TimelineSemaphore();
 
-    [[nodiscard]] auto handle() const noexcept -> VkSemaphore { return handle_; }
+    [[nodiscard]] auto handle() const noexcept -> VkSemaphore
+    {
+        return handle_;
+    }
 
     /**
      * @brief signals the semaphore to the provided timeline value
@@ -151,9 +154,10 @@ public:
      * @param value timeline value to wait for
      * @param timeout_ns timeout in nanoseconds (default: UINT64_MAX means forever)
      */
-    void wait(std::uint64_t value, std::uint64_t timeout_ns = std::numeric_limits<std::uint64_t>::max()) const;
+    void wait(std::uint64_t value,
+              std::uint64_t timeout_ns = std::numeric_limits<std::uint64_t>::max()) const;
 
-private:
+  private:
     VkDevice    device_{VK_NULL_HANDLE};
     VkSemaphore handle_{VK_NULL_HANDLE};
 };
@@ -167,7 +171,7 @@ struct StagingRing
 {
     VmaAllocation allocation{VK_NULL_HANDLE}; ///< VMA allocation token
     VkBuffer      buffer{VK_NULL_HANDLE};     ///< Vulkan buffer handle
-    std::byte *   mapped{nullptr};            ///< persistently mapped pointer
+    std::byte    *mapped{nullptr};            ///< persistently mapped pointer
     std::uint64_t size{0U};                   ///< total capacity in bytes
     std::uint64_t head{0U};                   ///< simple monotonic offset; wrap manually
 };
@@ -179,11 +183,11 @@ struct StagingRing
  */
 struct ContextCreateInfo
 {
-    bool enable_validation{true};                  ///< request VK_LAYER_KHRONOS_validation if available
-    std::optional<std::uint32_t> device_index{};   ///< force a specific physical device index
+    bool enable_validation{true};                       ///< request VK_LAYER_KHRONOS_validation if available
+    std::optional<std::uint32_t> device_index{};        ///< force a specific physical device index
     std::string_view preferred_device_substring{"AMD"}; ///< fuzzy match hint for default selection
-    std::uint64_t staging_buffer_bytes{64ULL * 1024ULL * 1024ULL}; ///< persistent staging ring size
-    bool require_descriptor_buffer{true};          ///< hard fail if VK_EXT_descriptor_buffer absent
+    std::uint64_t    staging_buffer_bytes{64ULL * 1024ULL * 1024ULL}; ///< persistent staging ring size
+    bool             require_descriptor_buffer{true}; ///< hard fail if VK_EXT_descriptor_buffer absent
 };
 
 /**
@@ -194,12 +198,12 @@ struct ContextCreateInfo
  */
 class VulkanContext
 {
-public:
+  public:
     VulkanContext() = default;
 
     static auto create(const ContextCreateInfo &info = {}) -> std::expected<VulkanContext, VulkanError>;
 
-    VulkanContext(const VulkanContext &)            = delete;
+    VulkanContext(const VulkanContext &)                     = delete;
     auto operator=(const VulkanContext &) -> VulkanContext & = delete;
 
     VulkanContext(VulkanContext &&other) noexcept;
@@ -207,13 +211,34 @@ public:
 
     ~VulkanContext();
 
-    [[nodiscard]] auto instance() const noexcept -> VkInstance { return instance_; }
-    [[nodiscard]] auto device() const noexcept -> VkDevice { return device_; }
-    [[nodiscard]] auto allocator() const noexcept -> VmaAllocator { return allocator_; }
-    [[nodiscard]] auto queue_info() const noexcept -> const QueueInfo & { return queue_info_; }
-    [[nodiscard]] auto descriptor_support() const noexcept -> const DescriptorSupport & { return descriptor_support_; }
-    [[nodiscard]] auto device_summary() const noexcept -> const DeviceSummary & { return summary_; }
-    [[nodiscard]] auto staging_ring() const noexcept -> const StagingRing & { return staging_ring_; }
+    [[nodiscard]] auto instance() const noexcept -> VkInstance
+    {
+        return instance_;
+    }
+    [[nodiscard]] auto device() const noexcept -> VkDevice
+    {
+        return device_;
+    }
+    [[nodiscard]] auto allocator() const noexcept -> VmaAllocator
+    {
+        return allocator_;
+    }
+    [[nodiscard]] auto queue_info() const noexcept -> const QueueInfo &
+    {
+        return queue_info_;
+    }
+    [[nodiscard]] auto descriptor_support() const noexcept -> const DescriptorSupport &
+    {
+        return descriptor_support_;
+    }
+    [[nodiscard]] auto device_summary() const noexcept -> const DeviceSummary &
+    {
+        return summary_;
+    }
+    [[nodiscard]] auto staging_ring() const noexcept -> const StagingRing &
+    {
+        return staging_ring_;
+    }
 
     /**
      * @brief allocates a new timeline semaphore wrapped in RAII helper
@@ -246,7 +271,8 @@ public:
      * @param name label text logged in tools
      * @param color RGBA debug color (each 0..1)
      */
-    void push_debug_label(VkCommandBuffer cmd, std::string_view name, std::array<float, 4U> color = {0.3F, 0.4F, 0.9F, 1.0F}) const;
+    void push_debug_label(VkCommandBuffer cmd, std::string_view name,
+                          std::array<float, 4U> color = {0.3F, 0.4F, 0.9F, 1.0F}) const;
 
     /**
      * @brief ends the most recent debug label region on the command buffer
@@ -264,23 +290,24 @@ public:
      * @param dst_access destination access flags
      * @return VkMemoryBarrier2 struct ready for vkCmdPipelineBarrier2
      */
-    [[nodiscard]] static auto make_memory_barrier(VkPipelineStageFlags2 src_usage, VkPipelineStageFlags2 dst_usage,
-                                                  VkAccessFlags2 src_access, VkAccessFlags2 dst_access) noexcept -> VkMemoryBarrier2;
+    [[nodiscard]] static auto make_memory_barrier(VkPipelineStageFlags2 src_usage,
+                                                  VkPipelineStageFlags2 dst_usage, VkAccessFlags2 src_access,
+                                                  VkAccessFlags2 dst_access) noexcept -> VkMemoryBarrier2;
 
-private:
-    VkInstance           instance_{VK_NULL_HANDLE};
+  private:
+    VkInstance               instance_{VK_NULL_HANDLE};
     VkDebugUtilsMessengerEXT debug_messenger_{VK_NULL_HANDLE};
-    VkPhysicalDevice     physical_device_{VK_NULL_HANDLE};
-    VkDevice             device_{VK_NULL_HANDLE};
-    VmaAllocator         allocator_{VK_NULL_HANDLE};
-    QueueInfo            queue_info_{};
-    DescriptorSupport    descriptor_support_{};
-    DeviceSummary        summary_{};
-    StagingRing          staging_ring_{};
+    VkPhysicalDevice         physical_device_{VK_NULL_HANDLE};
+    VkDevice                 device_{VK_NULL_HANDLE};
+    VmaAllocator             allocator_{VK_NULL_HANDLE};
+    QueueInfo                queue_info_{};
+    DescriptorSupport        descriptor_support_{};
+    DeviceSummary            summary_{};
+    StagingRing              staging_ring_{};
 
-    PFN_vkSetDebugUtilsObjectNameEXT  set_object_name_fn_{nullptr};
-    PFN_vkCmdBeginDebugUtilsLabelEXT  begin_label_fn_{nullptr};
-    PFN_vkCmdEndDebugUtilsLabelEXT    end_label_fn_{nullptr};
+    PFN_vkSetDebugUtilsObjectNameEXT set_object_name_fn_{nullptr};
+    PFN_vkCmdBeginDebugUtilsLabelEXT begin_label_fn_{nullptr};
+    PFN_vkCmdEndDebugUtilsLabelEXT   end_label_fn_{nullptr};
 
     void destroy();
 };

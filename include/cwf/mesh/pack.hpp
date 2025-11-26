@@ -94,14 +94,14 @@ struct Float3SoA
  */
 struct NodeBuffers
 {
-    Float3SoA              position0; ///< reference positions (mesh nodes)
-    Float3SoA              displacement; ///< u vector (initially zero)
-    Float3SoA              velocity; ///< v vector (initially zero)
-    Float3SoA              acceleration; ///< a vector (initially zero)
-    Float3SoA              external_force; ///< assembled loads from YAML
-    std::vector<std::uint32_t> bc_mask; ///< bitmask per node (xyz bits)
-    Float3SoA              bc_value; ///< optional prescribed displacement values
-    std::vector<float>     lumped_mass; ///< per-node lumped mass (kg)
+    Float3SoA                  position0;      ///< reference positions (mesh nodes)
+    Float3SoA                  displacement;   ///< u vector (initially zero)
+    Float3SoA                  velocity;       ///< v vector (initially zero)
+    Float3SoA                  acceleration;   ///< a vector (initially zero)
+    Float3SoA                  external_force; ///< assembled loads from YAML
+    std::vector<std::uint32_t> bc_mask;        ///< bitmask per node (xyz bits)
+    Float3SoA                  bc_value;       ///< optional prescribed displacement values
+    std::vector<float>         lumped_mass;    ///< per-node lumped mass (kg)
 };
 
 /**
@@ -109,9 +109,9 @@ struct NodeBuffers
  */
 struct ElementBuffers
 {
-    std::vector<std::uint32_t> connectivity; ///< flattened node indices (8 entries per element)
-    std::vector<float>         gradients; ///< grad Ni (element-major, 8*3 floats per element)
-    std::vector<float>         volume; ///< element volume [m^3]
+    std::vector<std::uint32_t> connectivity;   ///< flattened node indices (8 entries per element)
+    std::vector<float>         gradients;      ///< grad Ni (element-major, 8*3 floats per element)
+    std::vector<float>         volume;         ///< element volume [m^3]
     std::vector<std::uint32_t> material_index; ///< index into config::materials
 };
 
@@ -120,9 +120,9 @@ struct ElementBuffers
  */
 struct AdjacencyBuffers
 {
-    std::vector<std::uint32_t> offsets; ///< node offset table (size nodes+1)
+    std::vector<std::uint32_t> offsets;         ///< node offset table (size nodes+1)
     std::vector<std::uint32_t> element_indices; ///< incident element indices
-    std::vector<std::uint8_t>  local_indices; ///< local node slot per adjacency entry
+    std::vector<std::uint8_t>  local_indices;   ///< local node slot per adjacency entry
 };
 
 /**
@@ -130,13 +130,13 @@ struct AdjacencyBuffers
  */
 struct SolverBuffers
 {
-    std::vector<float> p;   ///< search direction (FP32)
-    std::vector<float> r;   ///< residual (FP32)
-    std::vector<float> Ap;  ///< operator application (FP32)
-    std::vector<float> z;   ///< preconditioned residual (FP32)
-    std::vector<float> x;   ///< solution accumulator / delta-u (FP32)
-    std::vector<double> partials; ///< FP64 reduction partial sums (per workgroup)
-    std::vector<float> block_inverse; ///< cached block-jacobi inverse (3x3 per node, row-major)
+    std::vector<float>  p;             ///< search direction (FP32)
+    std::vector<float>  r;             ///< residual (FP32)
+    std::vector<float>  Ap;            ///< operator application (FP32)
+    std::vector<float>  z;             ///< preconditioned residual (FP32)
+    std::vector<float>  x;             ///< solution accumulator / delta-u (FP32)
+    std::vector<double> partials;      ///< FP64 reduction partial sums (per workgroup)
+    std::vector<float>  block_inverse; ///< cached block-jacobi inverse (3x3 per node, row-major)
 };
 
 /**
@@ -144,10 +144,10 @@ struct SolverBuffers
  */
 struct PackedBuffers
 {
-    NodeBuffers      nodes; ///< node-centric data (pos0, kinematics, constraints)
-    ElementBuffers   elements; ///< element-centric data
+    NodeBuffers      nodes;     ///< node-centric data (pos0, kinematics, constraints)
+    ElementBuffers   elements;  ///< element-centric data
     AdjacencyBuffers adjacency; ///< node-element adjacency (CSR)
-    SolverBuffers    solver; ///< solver scratch vectors and FP64 partials
+    SolverBuffers    solver;    ///< solver scratch vectors and FP64 partials
 };
 
 /**
@@ -155,10 +155,10 @@ struct PackedBuffers
  */
 struct PackedMetadata
 {
-    std::size_t node_count{}; ///< number of mesh nodes
-    std::size_t element_count{}; ///< number of solid elements
-    std::size_t dof_count{}; ///< degrees of freedom (node_count * 3)
-    std::size_t reduction_block{}; ///< reduction workgroup width (usually 256)
+    std::size_t node_count{};         ///< number of mesh nodes
+    std::size_t element_count{};      ///< number of solid elements
+    std::size_t dof_count{};          ///< degrees of freedom (node_count * 3)
+    std::size_t reduction_block{};    ///< reduction workgroup width (usually 256)
     std::size_t reduction_partials{}; ///< length of solver.partials
 };
 
@@ -167,7 +167,7 @@ struct PackedMetadata
  */
 struct PackingResult
 {
-    PackedBuffers buffers; ///< struct-of-arrays outputs
+    PackedBuffers  buffers;  ///< struct-of-arrays outputs
     PackedMetadata metadata; ///< counts and reduction info
 };
 
@@ -185,7 +185,7 @@ struct PackError
  */
 struct PackingParameters
 {
-    double      load_time_seconds{0.0}; ///< time instant for assembling loads
+    double      load_time_seconds{0.0};     ///< time instant for assembling loads
     std::size_t reduction_block_size{256U}; ///< nodes per reduction workgroup (>= 1)
 };
 

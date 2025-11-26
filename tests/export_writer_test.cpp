@@ -3,14 +3,13 @@
  * @brief smoke tests for the VTU writer + probe logger stack
  */
 
-#include <gtest/gtest.h>
-
 #include <filesystem>
 #include <fstream>
+#include <gtest/gtest.h>
 #include <limits>
 
-#include "cwf/config/config.hpp"
 #include "cwf/common/math.hpp"
+#include "cwf/config/config.hpp"
 #include "cwf/mesh/mesh.hpp"
 #include "cwf/mesh/pack.hpp"
 #include "cwf/mesh/preprocess.hpp"
@@ -38,33 +37,40 @@ using cwf::post::compute_derived_fields;
     mesh.group_lookup.emplace(1U, 0U);
 
     cwf::mesh::Element tet{};
-    tet.original_id = 0U;
+    tet.original_id    = 0U;
     tet.physical_group = 1U;
-    tet.geometry = cwf::mesh::ElementGeometry::Tetrahedron4;
-    tet.nodes = {0U, 1U, 2U, 3U, std::numeric_limits<std::uint32_t>::max(), std::numeric_limits<std::uint32_t>::max(),
-                 std::numeric_limits<std::uint32_t>::max(), std::numeric_limits<std::uint32_t>::max()};
+    tet.geometry       = cwf::mesh::ElementGeometry::Tetrahedron4;
+    tet.nodes          = {0U,
+                          1U,
+                          2U,
+                          3U,
+                          std::numeric_limits<std::uint32_t>::max(),
+                          std::numeric_limits<std::uint32_t>::max(),
+                          std::numeric_limits<std::uint32_t>::max(),
+                          std::numeric_limits<std::uint32_t>::max()};
     mesh.elements.push_back(tet);
 
     cwf::config::Config cfg{};
     cfg.mesh_path = std::filesystem::path{"synthetic.msh"};
-    cfg.materials.push_back(cwf::config::Material{.name = "steel", .youngs_modulus = 30.0e9, .poisson_ratio = 0.2, .density = 2500.0});
+    cfg.materials.push_back(cwf::config::Material{
+        .name = "steel", .youngs_modulus = 30.0e9, .poisson_ratio = 0.2, .density = 2500.0});
     cfg.assignments.push_back(cwf::config::Assignment{.group = "SOLID", .material = "steel"});
     cfg.damping = cwf::config::Damping{.xi = 0.02, .w1 = 5.0, .w2 = 50.0};
     cfg.time = cwf::config::TimeSettings{.initial_dt = 0.01, .adaptive = false, .min_dt = 0.0, .max_dt = 0.0};
-    cfg.solver = cwf::config::SolverSettings{.type = "pcg",
-                                             .preconditioner = "block_jacobi",
-                                             .runtime_tolerance = 1.0e-4,
-                                             .pause_tolerance = 1.0e-5,
-                                             .max_iterations = 64U};
+    cfg.solver    = cwf::config::SolverSettings{.type              = "pcg",
+                                                .preconditioner    = "block_jacobi",
+                                                .runtime_tolerance = 1.0e-4,
+                                                .pause_tolerance   = 1.0e-5,
+                                                .max_iterations    = 64U};
     cfg.precision = cwf::config::PrecisionSettings{.vector_precision = "fp32", .reduction_precision = "fp64"};
-    cfg.output = cwf::config::OutputSettings{.vtu_stride = 1U, .probes = {}};
+    cfg.output    = cwf::config::OutputSettings{.vtu_stride = 1U, .probes = {}};
 
     return {mesh, cfg};
 }
 
 TEST(VtuWriter, WritesBinaryFileWithMetadata)
 {
-    auto [mesh, cfg] = make_mesh_and_config();
+    auto [mesh, cfg]             = make_mesh_and_config();
     const auto preprocess_result = cwf::mesh::pre::run(mesh, cfg);
     ASSERT_TRUE(preprocess_result.has_value());
     auto pack_result = cwf::mesh::pack::build_packed_buffers(mesh, preprocess_result.value(), cfg, {});
@@ -84,8 +90,8 @@ TEST(VtuWriter, WritesBinaryFileWithMetadata)
     const auto derived = compute_derived_fields(pack, materials);
 
     const auto out_dir = std::filesystem::temp_directory_path() / "cwf_vtu_test";
-    const auto path = out_dir / "frame_0.vtu";
-    const auto result = cwf::post::write_vtu(path, mesh, pack, derived, 0.0, 0U);
+    const auto path    = out_dir / "frame_0.vtu";
+    const auto result  = cwf::post::write_vtu(path, mesh, pack, derived, 0.0, 0U);
     ASSERT_TRUE(result.has_value());
     ASSERT_TRUE(std::filesystem::exists(path));
 
@@ -98,7 +104,7 @@ TEST(VtuWriter, WritesBinaryFileWithMetadata)
 
 TEST(ProbeLoggerTests, WritesCsvRows)
 {
-    auto [mesh, cfg] = make_mesh_and_config();
+    auto [mesh, cfg]             = make_mesh_and_config();
     const auto preprocess_result = cwf::mesh::pre::run(mesh, cfg);
     ASSERT_TRUE(preprocess_result.has_value());
     auto pack_result = cwf::mesh::pack::build_packed_buffers(mesh, preprocess_result.value(), cfg, {});
@@ -121,9 +127,9 @@ TEST(ProbeLoggerTests, WritesCsvRows)
 
     const auto derived = compute_derived_fields(pack, materials);
 
-    const auto csv_path = std::filesystem::temp_directory_path() / "cwf_vtu_test" / "probes.csv";
+    const auto             csv_path = std::filesystem::temp_directory_path() / "cwf_vtu_test" / "probes.csv";
     cwf::post::ProbeLogger logger(csv_path, {0U, 1U});
-    const auto status = logger.log_frame(0.0, 0U, pack, derived);
+    const auto             status = logger.log_frame(0.0, 0U, pack, derived);
     ASSERT_TRUE(status.has_value());
 
     std::ifstream file(csv_path);
@@ -138,7 +144,7 @@ TEST(ProbeLoggerTests, WritesCsvRows)
 
 TEST(OutputManagerTests, EnforcesStrideAndProbes)
 {
-    auto [mesh, cfg] = make_mesh_and_config();
+    auto [mesh, cfg]             = make_mesh_and_config();
     const auto preprocess_result = cwf::mesh::pre::run(mesh, cfg);
     ASSERT_TRUE(preprocess_result.has_value());
     auto pack_result = cwf::mesh::pack::build_packed_buffers(mesh, preprocess_result.value(), cfg, {});
@@ -155,8 +161,8 @@ TEST(OutputManagerTests, EnforcesStrideAndProbes)
     }();
 
     cwf::config::OutputSettings settings{.vtu_stride = 2U, .probes = {0U}};
-    const auto out_dir = std::filesystem::temp_directory_path() / "cwf_vtu_test_manager";
-    cwf::post::OutputManager manager(out_dir, mesh, pack, materials, settings);
+    const auto                  out_dir = std::filesystem::temp_directory_path() / "cwf_vtu_test_manager";
+    cwf::post::OutputManager    manager(out_dir, mesh, pack, materials, settings);
 
     for (std::uint32_t frame = 0; frame < 3U; ++frame)
     {

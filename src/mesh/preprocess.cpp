@@ -212,15 +212,15 @@ struct MaterialBinding
         const auto group_id = name_to_group.at(fix.group);
         const auto surf_it  = mesh.surface_groups.find(group_id);
         const auto node_it  = mesh.node_groups.find(group_id);
-        
+
         const bool has_surfaces = (surf_it != mesh.surface_groups.end() && !surf_it->second.empty());
         const bool has_nodes    = (node_it != mesh.node_groups.end() && !node_it->second.empty());
 
         if (!has_surfaces && !has_nodes)
         {
-            return std::unexpected(
-                PreprocessError{std::format("dirichlet group '{}' has no discretized faces or nodes", fix.group),
-                                {"dirichlet", "fixes", std::format("[{}]", i)}});
+            return std::unexpected(PreprocessError{
+                std::format("dirichlet group '{}' has no discretized faces or nodes", fix.group),
+                {"dirichlet", "fixes", std::format("[{}]", i)}});
         }
     }
 
@@ -316,10 +316,14 @@ struct MaterialBinding
 
     // 8-point Gauss quadrature locations
     constexpr std::array<std::array<double, 3>, 8> kGaussPoints = {{
-        {-kGaussCoord, -kGaussCoord, -kGaussCoord}, {+kGaussCoord, -kGaussCoord, -kGaussCoord},
-        {+kGaussCoord, +kGaussCoord, -kGaussCoord}, {-kGaussCoord, +kGaussCoord, -kGaussCoord},
-        {-kGaussCoord, -kGaussCoord, +kGaussCoord}, {+kGaussCoord, -kGaussCoord, +kGaussCoord},
-        {+kGaussCoord, +kGaussCoord, +kGaussCoord}, {-kGaussCoord, +kGaussCoord, +kGaussCoord},
+        {-kGaussCoord, -kGaussCoord, -kGaussCoord},
+        {+kGaussCoord, -kGaussCoord, -kGaussCoord},
+        {+kGaussCoord, +kGaussCoord, -kGaussCoord},
+        {-kGaussCoord, +kGaussCoord, -kGaussCoord},
+        {-kGaussCoord, -kGaussCoord, +kGaussCoord},
+        {+kGaussCoord, -kGaussCoord, +kGaussCoord},
+        {+kGaussCoord, +kGaussCoord, +kGaussCoord},
+        {-kGaussCoord, +kGaussCoord, +kGaussCoord},
     }};
 
     std::array<Vec3, 8> grad_sum{};
@@ -373,7 +377,7 @@ struct MaterialBinding
         volume += det_j; // weight = 1.0
 
         // inverse Jacobian (J^-1)
-        const double inv_det = 1.0 / det_j;
+        const double                         inv_det = 1.0 / det_j;
         std::array<std::array<double, 3>, 3> jac_inv{};
         jac_inv[0][0] = inv_det * (jac[1][1] * jac[2][2] - jac[1][2] * jac[2][1]);
         jac_inv[0][1] = inv_det * (jac[0][2] * jac[2][1] - jac[0][1] * jac[2][2]);
@@ -388,12 +392,12 @@ struct MaterialBinding
         // transform gradients to physical space: dN/dx = J^-T * dN/dnat
         for (std::size_t i = 0; i < 8; ++i)
         {
-            const double dNdx = jac_inv[0][0] * dNdnat[i][0] + jac_inv[1][0] * dNdnat[i][1] +
-                                jac_inv[2][0] * dNdnat[i][2];
-            const double dNdy = jac_inv[0][1] * dNdnat[i][0] + jac_inv[1][1] * dNdnat[i][1] +
-                                jac_inv[2][1] * dNdnat[i][2];
-            const double dNdz = jac_inv[0][2] * dNdnat[i][0] + jac_inv[1][2] * dNdnat[i][1] +
-                                jac_inv[2][2] * dNdnat[i][2];
+            const double dNdx =
+                jac_inv[0][0] * dNdnat[i][0] + jac_inv[1][0] * dNdnat[i][1] + jac_inv[2][0] * dNdnat[i][2];
+            const double dNdy =
+                jac_inv[0][1] * dNdnat[i][0] + jac_inv[1][1] * dNdnat[i][1] + jac_inv[2][1] * dNdnat[i][2];
+            const double dNdz =
+                jac_inv[0][2] * dNdnat[i][0] + jac_inv[1][2] * dNdnat[i][1] + jac_inv[2][2] * dNdnat[i][2];
 
             // accumulate weighted by det_j (integration weighting)
             grad_sum[i][0] += dNdx * det_j;
@@ -536,7 +540,7 @@ auto run(const mesh::Mesh &mesh, const config::Config &cfg) -> std::expected<Out
         const auto material_index                  = material_iter->second;
         outputs.element_material_index[elem_index] = material_index;
         const auto   density                       = cfg.materials[material_index].density;
-        const double lump = density * volume / static_cast<double>(node_count);
+        const double lump                          = density * volume / static_cast<double>(node_count);
         for (std::size_t local = 0; local < node_count; ++local)
         {
             outputs.lumped_mass[element.nodes[local]] += lump;

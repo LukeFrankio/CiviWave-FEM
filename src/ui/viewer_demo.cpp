@@ -12,8 +12,6 @@
  * @note targets the usual GCC 15.2 + C++26 toolchain per repo defaults
  */
 
-#include "cwf/ui/viewer.hpp"
-
 #include <array>
 #include <cstdlib>
 #include <expected>
@@ -33,6 +31,7 @@
 #include "cwf/physics/newmark.hpp"
 #include "cwf/physics/solver.hpp"
 #include "cwf/post/derived_fields.hpp"
+#include "cwf/ui/viewer.hpp"
 
 namespace
 {
@@ -71,9 +70,14 @@ namespace
     tet.original_id    = 0U;
     tet.geometry       = cwf::mesh::ElementGeometry::Tetrahedron4;
     tet.physical_group = 1U;
-    tet.nodes          = {0U, 1U, 2U, 3U, std::numeric_limits<std::uint32_t>::max(),
-                 std::numeric_limits<std::uint32_t>::max(), std::numeric_limits<std::uint32_t>::max(),
-                 std::numeric_limits<std::uint32_t>::max()};
+    tet.nodes          = {0U,
+                          1U,
+                          2U,
+                          3U,
+                          std::numeric_limits<std::uint32_t>::max(),
+                          std::numeric_limits<std::uint32_t>::max(),
+                          std::numeric_limits<std::uint32_t>::max(),
+                          std::numeric_limits<std::uint32_t>::max()};
     mesh.elements.push_back(tet);
 
     cwf::mesh::Surface base{};
@@ -114,13 +118,13 @@ namespace
     assignment.material = "steel";
     cfg.assignments.push_back(assignment);
 
-    cfg.damping  = cwf::config::Damping{.xi = 0.02, .w1 = 5.0, .w2 = 50.0};
-    cfg.time     = cwf::config::TimeSettings{.initial_dt = 0.01, .adaptive = false, .min_dt = 0.0, .max_dt = 0.0};
-    cfg.solver   = cwf::config::SolverSettings{.type = "pcg",
-                                             .preconditioner   = "block_jacobi",
-                                             .runtime_tolerance = 1.0e-4,
-                                             .pause_tolerance   = 1.0e-5,
-                                             .max_iterations    = 64U};
+    cfg.damping = cwf::config::Damping{.xi = 0.02, .w1 = 5.0, .w2 = 50.0};
+    cfg.time = cwf::config::TimeSettings{.initial_dt = 0.01, .adaptive = false, .min_dt = 0.0, .max_dt = 0.0};
+    cfg.solver    = cwf::config::SolverSettings{.type              = "pcg",
+                                                .preconditioner    = "block_jacobi",
+                                                .runtime_tolerance = 1.0e-4,
+                                                .pause_tolerance   = 1.0e-5,
+                                                .max_iterations    = 64U};
     cfg.precision = cwf::config::PrecisionSettings{.vector_precision = "fp32", .reduction_precision = "fp64"};
 
     cwf::config::PointLoad point{};
@@ -175,7 +179,7 @@ void write_state_to_pack(const cwf::physics::newmark::State &state, cwf::mesh::p
 
     for (std::size_t node = 0; node < node_count; ++node)
     {
-        const std::size_t base = node * 3U;
+        const std::size_t base                  = node * 3U;
         pack.buffers.nodes.displacement.x[node] = static_cast<float>(state.displacement[base + 0U]);
         pack.buffers.nodes.displacement.y[node] = static_cast<float>(state.displacement[base + 1U]);
         pack.buffers.nodes.displacement.z[node] = static_cast<float>(state.displacement[base + 2U]);
@@ -202,12 +206,11 @@ void write_state_to_pack(const cwf::physics::newmark::State &state, cwf::mesh::p
  * @param rayleigh    Rayleigh damping coefficients shared with the viewer
  * @param pack        packed buffers that will receive solved displacements
  */
-void run_physics_step(const cwf::mesh::Mesh &mesh,
-                      const cwf::config::Config &cfg,
-                      const cwf::mesh::pre::Outputs &preprocess,
+void run_physics_step(const cwf::mesh::Mesh &mesh, const cwf::config::Config &cfg,
+                      const cwf::mesh::pre::Outputs                                 &preprocess,
                       const std::vector<cwf::physics::materials::ElasticProperties> &materials,
-                      const cwf::physics::materials::RayleighCoefficients &rayleigh,
-                      cwf::mesh::pack::PackingResult &pack)
+                      const cwf::physics::materials::RayleighCoefficients           &rayleigh,
+                      cwf::mesh::pack::PackingResult                                &pack)
 {
     const auto assembly  = cwf::physics::solver::assemble_linear_system(mesh, preprocess, materials);
     const auto dirichlet = cwf::physics::solver::build_dirichlet_conditions(mesh, cfg);
@@ -218,22 +221,12 @@ void run_physics_step(const cwf::mesh::Mesh &mesh,
     previous.velocity.assign(pack.metadata.dof_count, 0.0);
     previous.acceleration.assign(pack.metadata.dof_count, 0.0);
 
-    const auto result = cwf::physics::solver::solve_newmark_step(assembly,
-                                                                 rayleigh,
-                                                                 dirichlet,
-                                                                 mesh,
-                                                                 cfg,
-                                                                 preprocess,
-                                                                 coeffs,
-                                                                 previous,
-                                                                 /*time=*/0.0,
-                                                                 cfg.solver.runtime_tolerance,
-                                                                 static_cast<std::size_t>(cfg.solver.max_iterations));
+    const auto result = cwf::physics::solver::solve_newmark_step(
+        assembly, rayleigh, dirichlet, mesh, cfg, preprocess, coeffs, previous,
+        /*time=*/0.0, cfg.solver.runtime_tolerance, static_cast<std::size_t>(cfg.solver.max_iterations));
     write_state_to_pack(result.state, pack);
-    std::print("Solver iterations: {} residual {:.3e} (converged: {})\n",
-               result.stats.iterations,
-               result.stats.residual_norm,
-               result.stats.converged ? "yes" : "no");
+    std::print("Solver iterations: {} residual {:.3e} (converged: {})\n", result.stats.iterations,
+               result.stats.residual_norm, result.stats.converged ? "yes" : "no");
 }
 
 } // namespace
@@ -262,34 +255,28 @@ int main()
     }
     auto pack = std::move(pack_result.value());
 
-    std::print("Running viewer demo with {} nodes and {} elements\n", mesh.nodes.size(), mesh.elements.size());
-    for (size_t i = 0; i < mesh.nodes.size(); ++i) {
-        std::print("Node {}: ({}, {}, {})\n", i, 
-            pack.buffers.nodes.position0.x[i],
-            pack.buffers.nodes.position0.y[i],
-            pack.buffers.nodes.position0.z[i]);
+    std::print("Running viewer demo with {} nodes and {} elements\n", mesh.nodes.size(),
+               mesh.elements.size());
+    for (size_t i = 0; i < mesh.nodes.size(); ++i)
+    {
+        std::print("Node {}: ({}, {}, {})\n", i, pack.buffers.nodes.position0.x[i],
+                   pack.buffers.nodes.position0.y[i], pack.buffers.nodes.position0.z[i]);
     }
 
-    auto materials = make_materials(cfg);
-    const auto rayleigh = cwf::physics::materials::compute_rayleigh(cfg.damping);
+    auto       materials = make_materials(cfg);
+    const auto rayleigh  = cwf::physics::materials::compute_rayleigh(cfg.damping);
     run_physics_step(mesh, cfg, preprocess_result.value(), materials, rayleigh, pack);
     auto derived = cwf::post::compute_derived_fields(pack, materials);
 
-    const auto viewer_status = cwf::ui::run_viewer_once(mesh,
-                                                        std::move(pack),
-                                                        std::move(derived),
-                                                        std::move(materials),
-                                                        cfg.solver,
-                                                        cfg.time,
-                                                        rayleigh,
-                                                        0.0,
-                                                        std::filesystem::path{"tests/data"});
+    const auto viewer_status =
+        cwf::ui::run_viewer_once(mesh, std::move(pack), std::move(derived), std::move(materials), cfg.solver,
+                                 cfg.time, rayleigh, 0.0, std::filesystem::path{"tests/data"});
     if (!viewer_status)
     {
         std::print(stderr, "viewer error: {}\n", viewer_status.error().message);
         return EXIT_FAILURE;
     }
-    
+
     if (viewer_status->restart_with_config)
     {
         std::print("User requested restart with config: {}\n", viewer_status->restart_with_config->string());

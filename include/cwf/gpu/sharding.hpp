@@ -67,9 +67,9 @@ struct ShardError
  */
 struct BufferSpecification
 {
-    std::string   name;      ///< logical identifier (must be unique)
-    std::size_t   size_bytes; ///< total byte length of the buffer
-    std::size_t   alignment; ///< alignment constraint (power of two recommended)
+    std::string name;       ///< logical identifier (must be unique)
+    std::size_t size_bytes; ///< total byte length of the buffer
+    std::size_t alignment;  ///< alignment constraint (power of two recommended)
 };
 
 /**
@@ -77,11 +77,11 @@ struct BufferSpecification
  */
 struct ShardSegment
 {
-    std::string   name; ///< logical buffer name this segment represents
+    std::string   name;                ///< logical buffer name this segment represents
     std::uint32_t device_buffer_index; ///< which VkBuffer slot we drop into
-    std::size_t   device_offset; ///< byte offset inside the VkBuffer (aligned)
-    std::size_t   source_offset; ///< byte offset inside the logical buffer
-    std::size_t   size_bytes; ///< how many bytes this slice covers
+    std::size_t   device_offset;       ///< byte offset inside the VkBuffer (aligned)
+    std::size_t   source_offset;       ///< byte offset inside the logical buffer
+    std::size_t   size_bytes;          ///< how many bytes this slice covers
 };
 
 /**
@@ -89,10 +89,10 @@ struct ShardSegment
  */
 struct ShardedLayout
 {
-    std::vector<ShardSegment> segments; ///< every slice across all logical buffers
+    std::vector<ShardSegment> segments;            ///< every slice across all logical buffers
     std::vector<std::size_t>  device_buffer_sizes; ///< total size required per VkBuffer
-    std::size_t               max_buffer_bytes; ///< limit used while planning
-    std::size_t               alignment; ///< global alignment applied to shards
+    std::size_t               max_buffer_bytes;    ///< limit used while planning
+    std::size_t               alignment;           ///< global alignment applied to shards
 };
 
 /**
@@ -140,7 +140,7 @@ inline constexpr std::size_t kDefaultMaxBufferBytes = 2ULL * 1024ULL * 1024ULL *
  */
 [[nodiscard]] auto plan_shards(const std::vector<BufferSpecification> &specs,
                                std::size_t max_buffer_bytes = kDefaultMaxBufferBytes,
-                               std::size_t alignment = kDefaultAlignment)
+                               std::size_t alignment        = kDefaultAlignment)
     -> std::expected<ShardedLayout, ShardError>;
 
 } // namespace cwf::gpu::shard

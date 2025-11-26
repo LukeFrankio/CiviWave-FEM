@@ -3,12 +3,11 @@
  * @brief unit tests for Phase 8 matrix-free K_eff apply + PCG solver uwu
  */
 
-#include <gmock/gmock.h>
-#include <gtest/gtest.h>
-
 #include <array>
 #include <cmath>
 #include <filesystem>
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
 #include <limits>
 #include <numeric>
 #include <vector>
@@ -28,8 +27,8 @@ namespace
 
 using ::testing::Le;
 
-constexpr double kDt = 0.01;
-constexpr double kRelativeTol = 3.0e-4;
+constexpr double      kDt            = 0.01;
+constexpr double      kRelativeTol   = 3.0e-4;
 constexpr std::size_t kMaxIterations = 64U;
 
 [[nodiscard]] auto make_single_tet_mesh() -> cwf::mesh::Mesh
@@ -43,11 +42,16 @@ constexpr std::size_t kMaxIterations = 64U;
     };
 
     cwf::mesh::Element tet{};
-    tet.original_id   = 0U;
+    tet.original_id    = 0U;
     tet.physical_group = 1U; // SOLID
     tet.geometry       = cwf::mesh::ElementGeometry::Tetrahedron4;
-    tet.nodes          = {0U, 1U, 2U, 3U, std::numeric_limits<std::uint32_t>::max(),
-                          std::numeric_limits<std::uint32_t>::max(), std::numeric_limits<std::uint32_t>::max(),
+    tet.nodes          = {0U,
+                          1U,
+                          2U,
+                          3U,
+                          std::numeric_limits<std::uint32_t>::max(),
+                          std::numeric_limits<std::uint32_t>::max(),
+                          std::numeric_limits<std::uint32_t>::max(),
                           std::numeric_limits<std::uint32_t>::max()};
     mesh.elements.push_back(tet);
 
@@ -94,13 +98,11 @@ constexpr std::size_t kMaxIterations = 64U;
     cfg.damping = cwf::config::Damping{.xi = 0.02, .w1 = 5.0, .w2 = 50.0};
 
     cfg.time = cwf::config::TimeSettings{.initial_dt = kDt, .adaptive = false, .min_dt = 0.0, .max_dt = 0.0};
-    cfg.solver = cwf::config::SolverSettings{
-        .type = "pcg",
-        .preconditioner = "block_jacobi",
-        .runtime_tolerance = kRelativeTol,
-        .pause_tolerance   = 1.0e-5,
-        .max_iterations    = static_cast<std::uint32_t>(kMaxIterations)
-    };
+    cfg.solver    = cwf::config::SolverSettings{.type              = "pcg",
+                                                .preconditioner    = "block_jacobi",
+                                                .runtime_tolerance = kRelativeTol,
+                                                .pause_tolerance   = 1.0e-5,
+                                                .max_iterations    = static_cast<std::uint32_t>(kMaxIterations)};
     cfg.precision = cwf::config::PrecisionSettings{.vector_precision = "fp32", .reduction_precision = "fp64"};
 
     cwf::config::PointLoad point{};
@@ -132,9 +134,10 @@ constexpr std::size_t kMaxIterations = 64U;
     return materials;
 }
 
-void apply_dirichlet_dense(std::vector<double> &matrix, const cwf::physics::solver::DirichletConditions &dirichlet)
+void apply_dirichlet_dense(std::vector<double>                             &matrix,
+                           const cwf::physics::solver::DirichletConditions &dirichlet)
 {
-    const auto n = dirichlet.mask.size();
+    const auto n      = dirichlet.mask.size();
     const auto stride = n;
     for (std::size_t dof = 0; dof < n; ++dof)
     {
@@ -172,11 +175,11 @@ void apply_dirichlet_rhs(std::vector<double> &rhs, const cwf::physics::solver::D
 [[nodiscard]] auto dense_apply(const std::vector<double> &matrix, const std::vector<double> &vector)
     -> std::vector<double>
 {
-    const auto n = vector.size();
+    const auto          n = vector.size();
     std::vector<double> result(n, 0.0);
     for (std::size_t row = 0; row < n; ++row)
     {
-        double sum = 0.0;
+        double        sum     = 0.0;
         const double *row_ptr = matrix.data() + row * n;
         for (std::size_t col = 0; col < n; ++col)
         {
@@ -207,16 +210,17 @@ TEST(PcgPhase8, MatrixFreeApplyMatchesDense)
 
     const auto materials = make_materials(cfg);
 
-    const auto assembly = cwf::physics::solver::assemble_linear_system(mesh, pre, materials);
+    const auto assembly  = cwf::physics::solver::assemble_linear_system(mesh, pre, materials);
     const auto dirichlet = cwf::physics::solver::build_dirichlet_conditions(mesh, cfg);
 
-    const auto coeffs = cwf::physics::newmark::make_coefficients(kDt, 0.25, 0.5);
+    const auto coeffs   = cwf::physics::newmark::make_coefficients(kDt, 0.25, 0.5);
     const auto rayleigh = cwf::physics::materials::compute_rayleigh(cfg.damping);
 
-    auto keff = cwf::physics::newmark::build_effective_stiffness(assembly.stiffness, assembly.mass_diag, rayleigh, coeffs);
+    auto keff = cwf::physics::newmark::build_effective_stiffness(assembly.stiffness, assembly.mass_diag,
+                                                                 rayleigh, coeffs);
     apply_dirichlet_dense(keff, dirichlet);
 
-    const auto dof_count = pack.metadata.dof_count;
+    const auto         dof_count = pack.metadata.dof_count;
     std::vector<float> input(dof_count, 0.0F);
     for (std::size_t i = 0; i < dof_count; ++i)
     {
@@ -225,35 +229,36 @@ TEST(PcgPhase8, MatrixFreeApplyMatchesDense)
     std::vector<double> input_double(input.begin(), input.end());
 
     cwf::gpu::pcg::MatrixFreeSystem system{
-        .element_connectivity = std::span<const std::uint32_t>{pack.buffers.elements.connectivity},
-        .element_gradients = std::span<const float>{pack.buffers.elements.gradients},
-        .element_volume = std::span<const float>{pack.buffers.elements.volume},
+        .element_connectivity   = std::span<const std::uint32_t>{pack.buffers.elements.connectivity},
+        .element_gradients      = std::span<const float>{pack.buffers.elements.gradients},
+        .element_volume         = std::span<const float>{pack.buffers.elements.volume},
         .element_material_index = std::span<const std::uint32_t>{pack.buffers.elements.material_index},
-        .materials = std::span<const cwf::physics::materials::ElasticProperties>{materials},
-        .lumped_mass = std::span<const float>{pack.buffers.nodes.lumped_mass},
-        .bc_mask = std::span<const std::uint32_t>{pack.buffers.nodes.bc_mask},
-        .node_count = pack.metadata.node_count,
-        .element_count = pack.metadata.element_count,
-        .dof_count = pack.metadata.dof_count,
-        .stiffness_scale = 1.0 + coeffs.a1 * rayleigh.beta,
-        .mass_factor = coeffs.a0 + coeffs.a1 * rayleigh.alpha,
-        .reduction_block = pack.metadata.reduction_block,
-        .reduction_partials = pack.metadata.reduction_partials,
+        .materials              = std::span<const cwf::physics::materials::ElasticProperties>{materials},
+        .lumped_mass            = std::span<const float>{pack.buffers.nodes.lumped_mass},
+        .bc_mask                = std::span<const std::uint32_t>{pack.buffers.nodes.bc_mask},
+        .node_count             = pack.metadata.node_count,
+        .element_count          = pack.metadata.element_count,
+        .dof_count              = pack.metadata.dof_count,
+        .stiffness_scale        = 1.0 + coeffs.a1 * rayleigh.beta,
+        .mass_factor            = coeffs.a0 + coeffs.a1 * rayleigh.alpha,
+        .reduction_block        = pack.metadata.reduction_block,
+        .reduction_partials     = pack.metadata.reduction_partials,
     };
 
     cwf::gpu::pcg::MatrixFreeWorkspace workspace{};
-    std::vector<float> output(dof_count, 0.0F);
-    const auto status = cwf::gpu::pcg::apply_keff(system, input, output, workspace);
+    std::vector<float>                 output(dof_count, 0.0F);
+    const auto                         status = cwf::gpu::pcg::apply_keff(system, input, output, workspace);
     ASSERT_TRUE(status.has_value());
 
     const auto dense_output = dense_apply(keff, input_double);
     for (std::size_t dof = 0; dof < dof_count; ++dof)
     {
-        const double ref = dense_output[dof];
-        const double got = static_cast<double>(output[dof]);
+        const double ref      = dense_output[dof];
+        const double got      = static_cast<double>(output[dof]);
         const double abs_diff = std::abs(ref - got);
-        const double tol = std::max(1.0e-4, kRelativeTol * std::abs(ref));
-        EXPECT_LE(abs_diff, tol) << "DOF mismatch at index " << dof << " (ref=" << ref << ", got=" << got << ", abs_diff=" << abs_diff << ", tol=" << tol << ")";
+        const double tol      = std::max(1.0e-4, kRelativeTol * std::abs(ref));
+        EXPECT_LE(abs_diff, tol) << "DOF mismatch at index " << dof << " (ref=" << ref << ", got=" << got
+                                 << ", abs_diff=" << abs_diff << ", tol=" << tol << ")";
     }
 }
 
@@ -281,7 +286,8 @@ TEST(PcgPhase8, PcgMatchesCpuNewmark)
     const auto coeffs   = cwf::physics::newmark::make_coefficients(kDt, 0.25, 0.5);
     const auto rayleigh = cwf::physics::materials::compute_rayleigh(cfg.damping);
 
-    auto keff = cwf::physics::newmark::build_effective_stiffness(assembly.stiffness, assembly.mass_diag, rayleigh, coeffs);
+    auto keff = cwf::physics::newmark::build_effective_stiffness(assembly.stiffness, assembly.mass_diag,
+                                                                 rayleigh, coeffs);
     apply_dirichlet_dense(keff, dirichlet);
 
     cwf::physics::newmark::State previous{};
@@ -290,34 +296,29 @@ TEST(PcgPhase8, PcgMatchesCpuNewmark)
     previous.acceleration.assign(pack.metadata.dof_count, 0.0);
 
     const auto load_vector = cwf::physics::loads::assemble_load_vector(mesh, cfg, pre, /*time=*/0.0);
-    auto rhs_dense = cwf::physics::newmark::build_effective_rhs(
-        load_vector,
-        assembly.stiffness,
-        assembly.mass_diag,
-        rayleigh,
-        coeffs,
-        previous);
+    auto       rhs_dense   = cwf::physics::newmark::build_effective_rhs(
+        load_vector, assembly.stiffness, assembly.mass_diag, rayleigh, coeffs, previous);
     apply_dirichlet_rhs(rhs_dense, dirichlet, previous);
 
-    const auto reference_step = cwf::physics::solver::solve_newmark_step(assembly, rayleigh, dirichlet, mesh, cfg, pre,
-                                                                         coeffs, previous, /*time=*/0.0, kRelativeTol,
-                                                                         kMaxIterations);
+    const auto reference_step =
+        cwf::physics::solver::solve_newmark_step(assembly, rayleigh, dirichlet, mesh, cfg, pre, coeffs,
+                                                 previous, /*time=*/0.0, kRelativeTol, kMaxIterations);
 
     cwf::gpu::pcg::MatrixFreeSystem system{
-        .element_connectivity = std::span<const std::uint32_t>{pack.buffers.elements.connectivity},
-        .element_gradients = std::span<const float>{pack.buffers.elements.gradients},
-        .element_volume = std::span<const float>{pack.buffers.elements.volume},
+        .element_connectivity   = std::span<const std::uint32_t>{pack.buffers.elements.connectivity},
+        .element_gradients      = std::span<const float>{pack.buffers.elements.gradients},
+        .element_volume         = std::span<const float>{pack.buffers.elements.volume},
         .element_material_index = std::span<const std::uint32_t>{pack.buffers.elements.material_index},
-        .materials = std::span<const cwf::physics::materials::ElasticProperties>{materials},
-        .lumped_mass = std::span<const float>{pack.buffers.nodes.lumped_mass},
-        .bc_mask = std::span<const std::uint32_t>{pack.buffers.nodes.bc_mask},
-        .node_count = pack.metadata.node_count,
-        .element_count = pack.metadata.element_count,
-        .dof_count = pack.metadata.dof_count,
-        .stiffness_scale = 1.0 + coeffs.a1 * rayleigh.beta,
-        .mass_factor = coeffs.a0 + coeffs.a1 * rayleigh.alpha,
-        .reduction_block = pack.metadata.reduction_block,
-        .reduction_partials = pack.metadata.reduction_partials,
+        .materials              = std::span<const cwf::physics::materials::ElasticProperties>{materials},
+        .lumped_mass            = std::span<const float>{pack.buffers.nodes.lumped_mass},
+        .bc_mask                = std::span<const std::uint32_t>{pack.buffers.nodes.bc_mask},
+        .node_count             = pack.metadata.node_count,
+        .element_count          = pack.metadata.element_count,
+        .dof_count              = pack.metadata.dof_count,
+        .stiffness_scale        = 1.0 + coeffs.a1 * rayleigh.beta,
+        .mass_factor            = coeffs.a0 + coeffs.a1 * rayleigh.alpha,
+        .reduction_block        = pack.metadata.reduction_block,
+        .reduction_partials     = pack.metadata.reduction_partials,
     };
 
     std::vector<float> rhs_float(rhs_dense.begin(), rhs_dense.end());
@@ -332,19 +333,19 @@ TEST(PcgPhase8, PcgMatchesCpuNewmark)
     std::fill(partials.begin(), partials.end(), 0.0);
 
     cwf::gpu::pcg::PcgVectors vectors{
-        .solution = std::span<float>(solver_buffers.x.data(), solver_buffers.x.size()),
-        .residual = std::span<float>(solver_buffers.r.data(), solver_buffers.r.size()),
+        .solution         = std::span<float>(solver_buffers.x.data(), solver_buffers.x.size()),
+        .residual         = std::span<float>(solver_buffers.r.data(), solver_buffers.r.size()),
         .search_direction = std::span<float>(solver_buffers.p.data(), solver_buffers.p.size()),
-        .preconditioned = std::span<float>(solver_buffers.z.data(), solver_buffers.z.size()),
-        .matvec = std::span<float>(solver_buffers.Ap.data(), solver_buffers.Ap.size()),
-        .partials = std::span<double>(partials.data(), partials.size()),
+        .preconditioned   = std::span<float>(solver_buffers.z.data(), solver_buffers.z.size()),
+        .matvec           = std::span<float>(solver_buffers.Ap.data(), solver_buffers.Ap.size()),
+        .partials         = std::span<double>(partials.data(), partials.size()),
     };
 
     cwf::gpu::pcg::MatrixFreeWorkspace workspace{};
-    const cwf::gpu::pcg::PcgSettings settings{
-        .max_iterations = kMaxIterations,
-        .relative_tolerance = kRelativeTol,
-        .warm_start = false,
+    const cwf::gpu::pcg::PcgSettings   settings{
+          .max_iterations     = kMaxIterations,
+          .relative_tolerance = kRelativeTol,
+          .warm_start         = false,
     };
 
     const auto result = cwf::gpu::pcg::solve_pcg(system, rhs_float, settings, vectors, workspace);

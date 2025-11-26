@@ -45,11 +45,9 @@ struct VtuError
  * @param[in] frame_index zero-based frame counter (for metadata only)
  * @return std::expected<void, VtuError> success or contextual failure
  */
-[[nodiscard]] auto write_vtu(const std::filesystem::path &path,
-                             const mesh::Mesh &mesh,
-                             const mesh::pack::PackingResult &packing,
-                             const DerivedFieldSet &derived,
-                             double simulation_time,
-                             std::uint32_t frame_index) -> std::expected<void, VtuError>;
+[[nodiscard]] auto write_vtu(const std::filesystem::path &path, const mesh::Mesh &mesh,
+                             const mesh::pack::PackingResult &packing, const DerivedFieldSet &derived,
+                             double simulation_time, std::uint32_t frame_index)
+    -> std::expected<void, VtuError>;
 
 } // namespace cwf::post

@@ -9,11 +9,10 @@
  * correctness regressions in the predictor → RHS → PCG → update loop and the adaptive control hooks.
  */
 
-#include <gtest/gtest.h>
-
 #include <array>
 #include <cmath>
 #include <filesystem>
+#include <gtest/gtest.h>
 #include <limits>
 #include <span>
 #include <vector>
@@ -33,9 +32,9 @@ namespace
 
 using cwf::gpu::newmark::Stepper;
 
-constexpr double kDt = 0.01;
-constexpr double kRuntimeTol = 3.0e-4;
-constexpr double kPauseTol = 1.0e-5;
+constexpr double      kDt            = 0.01;
+constexpr double      kRuntimeTol    = 3.0e-4;
+constexpr double      kPauseTol      = 1.0e-5;
 constexpr std::size_t kMaxIterations = 64U;
 
 [[nodiscard]] auto make_single_tet_mesh() -> cwf::mesh::Mesh
@@ -49,18 +48,24 @@ constexpr std::size_t kMaxIterations = 64U;
     };
 
     cwf::mesh::Element tet{};
-    tet.original_id = 0U;
+    tet.original_id    = 0U;
     tet.physical_group = 1U;
-    tet.geometry = cwf::mesh::ElementGeometry::Tetrahedron4;
-    tet.nodes = {0U, 1U, 2U, 3U, std::numeric_limits<std::uint32_t>::max(), std::numeric_limits<std::uint32_t>::max(),
-                 std::numeric_limits<std::uint32_t>::max(), std::numeric_limits<std::uint32_t>::max()};
+    tet.geometry       = cwf::mesh::ElementGeometry::Tetrahedron4;
+    tet.nodes          = {0U,
+                          1U,
+                          2U,
+                          3U,
+                          std::numeric_limits<std::uint32_t>::max(),
+                          std::numeric_limits<std::uint32_t>::max(),
+                          std::numeric_limits<std::uint32_t>::max(),
+                          std::numeric_limits<std::uint32_t>::max()};
     mesh.elements.push_back(tet);
 
     cwf::mesh::Surface fixed{};
-    fixed.original_id = 0U;
+    fixed.original_id    = 0U;
     fixed.physical_group = 2U;
-    fixed.geometry = cwf::mesh::SurfaceGeometry::Triangle3;
-    fixed.nodes = {0U, 1U, 2U, std::numeric_limits<std::uint32_t>::max()};
+    fixed.geometry       = cwf::mesh::SurfaceGeometry::Triangle3;
+    fixed.nodes          = {0U, 1U, 2U, std::numeric_limits<std::uint32_t>::max()};
     mesh.surfaces.push_back(fixed);
 
     mesh.physical_groups = {
@@ -74,7 +79,7 @@ constexpr std::size_t kMaxIterations = 64U;
     }
 
     mesh.surface_groups[2U] = {0U};
-    mesh.node_groups[3U] = {3U};
+    mesh.node_groups[3U]    = {3U};
 
     return mesh;
 }
@@ -85,14 +90,14 @@ constexpr std::size_t kMaxIterations = 64U;
     cfg.mesh_path = std::filesystem::path{"synthetic.msh"};
 
     cwf::config::Material mat{};
-    mat.name = "steel";
+    mat.name           = "steel";
     mat.youngs_modulus = 30.0e9;
-    mat.poisson_ratio = 0.2;
-    mat.density = 2500.0;
+    mat.poisson_ratio  = 0.2;
+    mat.density        = 2500.0;
     cfg.materials.push_back(mat);
 
     cwf::config::Assignment assignment{};
-    assignment.group = "SOLID";
+    assignment.group    = "SOLID";
     assignment.material = "steel";
     cfg.assignments.push_back(assignment);
 
@@ -100,11 +105,11 @@ constexpr std::size_t kMaxIterations = 64U;
 
     cfg.time = cwf::config::TimeSettings{.initial_dt = kDt, .adaptive = false, .min_dt = 0.0, .max_dt = 0.0};
     cfg.solver = cwf::config::SolverSettings{
-        .type = "pcg",
-        .preconditioner = "block_jacobi",
+        .type              = "pcg",
+        .preconditioner    = "block_jacobi",
         .runtime_tolerance = kRuntimeTol,
-        .pause_tolerance = kPauseTol,
-        .max_iterations = static_cast<std::uint32_t>(kMaxIterations),
+        .pause_tolerance   = kPauseTol,
+        .max_iterations    = static_cast<std::uint32_t>(kMaxIterations),
     };
 
     cfg.precision = cwf::config::PrecisionSettings{.vector_precision = "fp32", .reduction_precision = "fp64"};
@@ -116,9 +121,9 @@ constexpr std::size_t kMaxIterations = 64U;
     cfg.loads.gravity = {0.0, 0.0, 0.0};
 
     cwf::config::DirichletFix fix{};
-    fix.group = "FIXED";
+    fix.group          = "FIXED";
     fix.constrain_axis = {true, true, true};
-    fix.value = {0.0, 0.0, 0.0};
+    fix.value          = {0.0, 0.0, 0.0};
     cfg.dirichlet.push_back(fix);
 
     cfg.output = cwf::config::OutputSettings{.vtu_stride = 10U, .probes = {}};
@@ -140,11 +145,11 @@ constexpr std::size_t kMaxIterations = 64U;
 
 [[nodiscard]] auto flatten_field(const cwf::mesh::pack::Float3SoA &soa) -> std::vector<double>
 {
-    const std::size_t node_count = soa.x.size();
+    const std::size_t   node_count = soa.x.size();
     std::vector<double> flattened(node_count * 3U, 0.0);
     for (std::size_t node = 0; node < node_count; ++node)
     {
-        const auto base = node * 3U;
+        const auto base      = node * 3U;
         flattened[base + 0U] = static_cast<double>(soa.x[node]);
         flattened[base + 1U] = static_cast<double>(soa.y[node]);
         flattened[base + 2U] = static_cast<double>(soa.z[node]);
@@ -154,11 +159,11 @@ constexpr std::size_t kMaxIterations = 64U;
 
 class NewmarkStepperFixture : public ::testing::Test
 {
-protected:
+  protected:
     void SetUp() override
     {
         mesh_ = make_single_tet_mesh();
-        cfg_ = make_basic_config();
+        cfg_  = make_basic_config();
 
         const auto preprocess_result = cwf::mesh::pre::run(mesh_, cfg_);
         ASSERT_TRUE(preprocess_result.has_value());
@@ -169,39 +174,36 @@ protected:
         base_pack_ = pack_result.value();
 
         materials_ = make_materials(cfg_);
-        assembly_ = cwf::physics::solver::assemble_linear_system(mesh_, preprocess_, materials_);
+        assembly_  = cwf::physics::solver::assemble_linear_system(mesh_, preprocess_, materials_);
         dirichlet_ = cwf::physics::solver::build_dirichlet_conditions(mesh_, cfg_);
-        rayleigh_ = cwf::physics::materials::compute_rayleigh(cfg_.damping);
+        rayleigh_  = cwf::physics::materials::compute_rayleigh(cfg_.damping);
     }
 
-    [[nodiscard]] auto make_stepper(cwf::mesh::pack::PackingResult &pack, const cwf::config::TimeSettings &time_settings,
+    [[nodiscard]] auto make_stepper(cwf::mesh::pack::PackingResult   &pack,
+                                    const cwf::config::TimeSettings  &time_settings,
                                     cwf::gpu::newmark::AdaptivePolicy policy = {}) const -> Stepper
     {
-        return Stepper(pack,
-                       std::span<const cwf::physics::materials::ElasticProperties>{materials_},
-                       rayleigh_,
-                       cfg_.solver,
-                       time_settings,
-                       policy);
+        return Stepper(pack, std::span<const cwf::physics::materials::ElasticProperties>{materials_},
+                       rayleigh_, cfg_.solver, time_settings, policy);
     }
 
-    cwf::mesh::Mesh mesh_{};
-    cwf::config::Config cfg_{};
-    cwf::mesh::pre::Outputs preprocess_{};
-    cwf::mesh::pack::PackingResult base_pack_{};
+    cwf::mesh::Mesh                                         mesh_{};
+    cwf::config::Config                                     cfg_{};
+    cwf::mesh::pre::Outputs                                 preprocess_{};
+    cwf::mesh::pack::PackingResult                          base_pack_{};
     std::vector<cwf::physics::materials::ElasticProperties> materials_{};
-    cwf::physics::solver::Assembly assembly_{};
-    cwf::physics::solver::DirichletConditions dirichlet_{};
-    cwf::physics::materials::RayleighCoefficients rayleigh_{};
+    cwf::physics::solver::Assembly                          assembly_{};
+    cwf::physics::solver::DirichletConditions               dirichlet_{};
+    cwf::physics::materials::RayleighCoefficients           rayleigh_{};
 };
 
 TEST_F(NewmarkStepperFixture, StepMatchesCpuReferenceState)
 {
-    auto pack = base_pack_;
-    auto time_settings = cfg_.time;
+    auto pack              = base_pack_;
+    auto time_settings     = cfg_.time;
     time_settings.adaptive = false;
 
-    auto stepper = make_stepper(pack, time_settings);
+    auto stepper   = make_stepper(pack, time_settings);
     auto telemetry = stepper.step(/*simulation_time_seconds=*/0.0, /*paused_mode=*/false);
     ASSERT_TRUE(telemetry.has_value());
 
@@ -210,21 +212,13 @@ TEST_F(NewmarkStepperFixture, StepMatchesCpuReferenceState)
     previous.velocity.assign(pack.metadata.dof_count, 0.0);
     previous.acceleration.assign(pack.metadata.dof_count, 0.0);
 
-    const auto coeffs = cwf::physics::newmark::make_coefficients(kDt, 0.25, 0.5);
-    const auto reference = cwf::physics::solver::solve_newmark_step(assembly_,
-                                                                   rayleigh_,
-                                                                   dirichlet_,
-                                                                   mesh_,
-                                                                   cfg_,
-                                                                   preprocess_,
-                                                                   coeffs,
-                                                                   previous,
-                                                                   /*time=*/0.0,
-                                                                   kRuntimeTol,
-                                                                   kMaxIterations);
+    const auto coeffs    = cwf::physics::newmark::make_coefficients(kDt, 0.25, 0.5);
+    const auto reference = cwf::physics::solver::solve_newmark_step(
+        assembly_, rayleigh_, dirichlet_, mesh_, cfg_, preprocess_, coeffs, previous,
+        /*time=*/0.0, kRuntimeTol, kMaxIterations);
 
     const auto displacement = flatten_field(pack.buffers.nodes.displacement);
-    const auto velocity = flatten_field(pack.buffers.nodes.velocity);
+    const auto velocity     = flatten_field(pack.buffers.nodes.velocity);
     const auto acceleration = flatten_field(pack.buffers.nodes.acceleration);
 
     for (std::size_t dof = 0; dof < pack.metadata.dof_count; ++dof)
@@ -240,10 +234,10 @@ TEST_F(NewmarkStepperFixture, StepMatchesCpuReferenceState)
 
 TEST_F(NewmarkStepperFixture, PauseModeUsesTighterTolerance)
 {
-    auto pack = base_pack_;
-    auto time_settings = cfg_.time;
-    auto stepper = make_stepper(pack, time_settings);
-    const auto telemetry = stepper.step(0.0, /*paused_mode=*/true);
+    auto       pack          = base_pack_;
+    auto       time_settings = cfg_.time;
+    auto       stepper       = make_stepper(pack, time_settings);
+    const auto telemetry     = stepper.step(0.0, /*paused_mode=*/true);
     ASSERT_TRUE(telemetry.has_value());
     EXPECT_TRUE(telemetry->paused_mode);
     EXPECT_NEAR(telemetry->applied_tolerance, kPauseTol, 1.0e-12);
@@ -251,16 +245,16 @@ TEST_F(NewmarkStepperFixture, PauseModeUsesTighterTolerance)
 
 TEST_F(NewmarkStepperFixture, AdaptiveDtIncreasesWhenIterationsAreLow)
 {
-    auto pack = base_pack_;
-    auto time_settings = cfg_.time;
+    auto pack              = base_pack_;
+    auto time_settings     = cfg_.time;
     time_settings.adaptive = true;
-    time_settings.max_dt = 0.02; // clamp growth to avoid runaway
+    time_settings.max_dt   = 0.02; // clamp growth to avoid runaway
 
     cwf::gpu::newmark::AdaptivePolicy policy{};
     policy.low_iteration_ratio = 1.0; // treat any convergence as "easy"
-    policy.increase_factor = 2.0;
+    policy.increase_factor     = 2.0;
 
-    auto stepper = make_stepper(pack, time_settings, policy);
+    auto       stepper   = make_stepper(pack, time_settings, policy);
     const auto telemetry = stepper.step(0.0, /*paused_mode=*/false);
     ASSERT_TRUE(telemetry.has_value());
     EXPECT_TRUE(telemetry->dt_increased);

@@ -14,8 +14,6 @@
  */
 #pragma once
 
-#include "cwf/gpu/sharding.hpp"
-
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -23,6 +21,8 @@
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include "cwf/gpu/sharding.hpp"
 
 namespace cwf::gpu::upload
 {
@@ -41,8 +41,8 @@ struct UploadError
  */
 struct BufferView
 {
-    std::string                      name;
-    std::span<const std::byte>       bytes;
+    std::string                name;
+    std::span<const std::byte> bytes;
 };
 
 /**
@@ -97,9 +97,8 @@ struct UploadSchedule
  * @complexity O(n) where n == layout.segments.size()
  * @warning providing duplicate BufferView names results in unspecified segment selection
  */
-[[nodiscard]] auto build_upload_schedule(const shard::ShardedLayout &layout,
-                                         const std::vector<BufferView> &buffers,
-                                         StagingConfig staging)
+[[nodiscard]] auto build_upload_schedule(const shard::ShardedLayout    &layout,
+                                         const std::vector<BufferView> &buffers, StagingConfig staging)
     -> std::expected<UploadSchedule, UploadError>;
 
 } // namespace cwf::gpu::upload

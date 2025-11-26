@@ -64,7 +64,8 @@ namespace
     }
     catch (const std::bad_alloc &)
     {
-        return std::unexpected(make_error("failed to grow matrix-free workspace buffers", {"dofs=" + std::to_string(system.dof_count)}));
+        return std::unexpected(make_error("failed to grow matrix-free workspace buffers",
+                                          {"dofs=" + std::to_string(system.dof_count)}));
     }
     return {};
 }
@@ -101,21 +102,22 @@ namespace
     }
     if (system.element_material_index.size() != system.element_count)
     {
-        return std::unexpected(make_error("material index table size mismatch",
-                                          {"expected=" + std::to_string(system.element_count),
-                                           "actual=" + std::to_string(system.element_material_index.size())}));
+        return std::unexpected(
+            make_error("material index table size mismatch",
+                       {"expected=" + std::to_string(system.element_count),
+                        "actual=" + std::to_string(system.element_material_index.size())}));
     }
     if (system.bc_mask.size() != system.node_count)
     {
-        return std::unexpected(make_error("bc mask size mismatch",
-                                          {"expected=" + std::to_string(system.node_count),
-                                           "actual=" + std::to_string(system.bc_mask.size())}));
+        return std::unexpected(
+            make_error("bc mask size mismatch", {"expected=" + std::to_string(system.node_count),
+                                                 "actual=" + std::to_string(system.bc_mask.size())}));
     }
     if (system.lumped_mass.size() != system.node_count)
     {
-        return std::unexpected(make_error("lumped mass size mismatch",
-                                          {"expected=" + std::to_string(system.node_count),
-                                           "actual=" + std::to_string(system.lumped_mass.size())}));
+        return std::unexpected(
+            make_error("lumped mass size mismatch", {"expected=" + std::to_string(system.node_count),
+                                                     "actual=" + std::to_string(system.lumped_mass.size())}));
     }
     if (system.dof_count != system.node_count * 3U)
     {
@@ -173,11 +175,11 @@ namespace
 {
     if (a.size() != b.size())
     {
-        return std::unexpected(make_error("dot product span size mismatch",
-                                          {"lhs=" + std::to_string(a.size()),
-                                           "rhs=" + std::to_string(b.size())}));
+        return std::unexpected(
+            make_error("dot product span size mismatch",
+                       {"lhs=" + std::to_string(a.size()), "rhs=" + std::to_string(b.size())}));
     }
-    const auto block = std::max<std::size_t>(1U, system.reduction_block);
+    const auto block             = std::max<std::size_t>(1U, system.reduction_block);
     const auto required_partials = chunk_count(a.size(), block);
     if (partials.size() < required_partials)
     {
@@ -189,8 +191,8 @@ namespace
     double total = 0.0;
     for (std::size_t chunk = 0; chunk < required_partials; ++chunk)
     {
-        const auto begin = chunk * block;
-        const auto end = std::min(begin + block, a.size());
+        const auto begin       = chunk * block;
+        const auto end         = std::min(begin + block, a.size());
         double     accumulator = 0.0;
         for (std::size_t idx = begin; idx < end; ++idx)
         {
@@ -231,7 +233,7 @@ namespace
 
     auto add_regularization = [&]() {
         const double max_diag = std::max({matrix[0], matrix[4], matrix[8]});
-        const double epsilon = std::max(1.0e-6, max_diag * 1.0e-6 + 1.0e-12);
+        const double epsilon  = std::max(1.0e-6, max_diag * 1.0e-6 + 1.0e-12);
         matrix[0] += epsilon;
         matrix[4] += epsilon;
         matrix[8] += epsilon;
@@ -253,7 +255,7 @@ namespace
         return inverse;
     }
 
-    const double inv_det = 1.0 / det;
+    const double          inv_det = 1.0 / det;
     std::array<double, 9> result{};
     result[0] = (matrix[4] * matrix[8] - matrix[5] * matrix[7]) * inv_det;
     result[1] = (matrix[2] * matrix[7] - matrix[1] * matrix[8]) * inv_det;
@@ -274,29 +276,29 @@ namespace
     std::fill(buffer.begin(), buffer.end(), 0.0);
 
     constexpr std::size_t kLocalNodes = 4U;
-    constexpr std::size_t kLocalDofs = 12U;
-    constexpr std::size_t kStrain = 6U;
+    constexpr std::size_t kLocalDofs  = 12U;
+    constexpr std::size_t kStrain     = 6U;
 
     for (std::size_t element = 0; element < system.element_count; ++element)
     {
         const auto connectivity_base = connectivity_offset(element);
-        const auto gradient_base = element_gradient_offset(element);
-        const auto material_index = system.element_material_index[element];
+        const auto gradient_base     = element_gradient_offset(element);
+        const auto material_index    = system.element_material_index[element];
         if (material_index >= system.materials.size())
         {
-            return std::unexpected(make_error("element references material out of range",
-                                              {"element=" + std::to_string(element),
-                                               "material_index=" + std::to_string(material_index)}));
+            return std::unexpected(make_error(
+                "element references material out of range",
+                {"element=" + std::to_string(element), "material_index=" + std::to_string(material_index)}));
         }
 
         std::array<double, kStrain * kLocalDofs> B{};
         for (std::size_t local = 0; local < kLocalNodes; ++local)
         {
-            const auto grad_index = gradient_base + local * 3U;
-            const double gx = static_cast<double>(system.element_gradients[grad_index + 0U]);
-            const double gy = static_cast<double>(system.element_gradients[grad_index + 1U]);
-            const double gz = static_cast<double>(system.element_gradients[grad_index + 2U]);
-            const auto col = local * 3U;
+            const auto   grad_index       = gradient_base + local * 3U;
+            const double gx               = static_cast<double>(system.element_gradients[grad_index + 0U]);
+            const double gy               = static_cast<double>(system.element_gradients[grad_index + 1U]);
+            const double gz               = static_cast<double>(system.element_gradients[grad_index + 2U]);
+            const auto   col              = local * 3U;
             B[0U * kLocalDofs + col + 0U] = gx;
             B[1U * kLocalDofs + col + 1U] = gy;
             B[2U * kLocalDofs + col + 2U] = gz;
@@ -309,7 +311,7 @@ namespace
         }
 
         std::array<double, kStrain * kLocalDofs> DB{};
-        const auto &stiffness = system.materials[material_index].stiffness;
+        const auto                              &stiffness = system.materials[material_index].stiffness;
         for (std::size_t row = 0; row < kStrain; ++row)
         {
             for (std::size_t col = 0; col < kLocalDofs; ++col)
@@ -337,7 +339,7 @@ namespace
             }
         }
 
-        const double volume = static_cast<double>(system.element_volume[element]);
+        const double volume        = static_cast<double>(system.element_volume[element]);
         const double scaled_volume = volume * system.stiffness_scale;
 
         for (double &value : ke)
@@ -350,9 +352,9 @@ namespace
             const auto node_index = system.element_connectivity[connectivity_base + local];
             if (node_index >= system.node_count)
             {
-                return std::unexpected(make_error("element connectivity references node out of range",
-                                                  {"element=" + std::to_string(element),
-                                                   "node=" + std::to_string(node_index)}));
+                return std::unexpected(
+                    make_error("element connectivity references node out of range",
+                               {"element=" + std::to_string(element), "node=" + std::to_string(node_index)}));
             }
             const auto block_base = node_index * 9U;
             for (std::size_t axis_i = 0; axis_i < 3U; ++axis_i)
@@ -369,7 +371,7 @@ namespace
 
     for (std::size_t node = 0; node < system.node_count; ++node)
     {
-        const double mass = static_cast<double>(system.lumped_mass[node]) * system.mass_factor;
+        const double mass       = static_cast<double>(system.lumped_mass[node]) * system.mass_factor;
         const auto   block_base = node * 9U;
         for (std::size_t axis = 0; axis < 3U; ++axis)
         {
@@ -381,12 +383,12 @@ namespace
     for (std::size_t node = 0; node < system.node_count; ++node)
     {
         std::array<double, 9> block{};
-        const auto block_base = node * 9U;
+        const auto            block_base = node * 9U;
         for (std::size_t i = 0; i < 9U; ++i)
         {
             block[i] = buffer[block_base + i];
         }
-        auto inv = invert_spd_3x3(block);
+        auto       inv  = invert_spd_3x3(block);
         const auto mask = system.bc_mask[node];
         for (std::size_t axis = 0; axis < 3U; ++axis)
         {
@@ -407,27 +409,26 @@ namespace
     return {};
 }
 
-auto apply_preconditioner(const MatrixFreeSystem &system, std::span<const float> residual, std::span<float> out,
-                          MatrixFreeWorkspace &workspace) -> std::expected<void, PcgError>
+auto apply_preconditioner(const MatrixFreeSystem &system, std::span<const float> residual,
+                          std::span<float> out, MatrixFreeWorkspace &workspace)
+    -> std::expected<void, PcgError>
 {
     if (residual.size() != system.dof_count || out.size() != system.dof_count)
     {
-        return std::unexpected(make_error("preconditioner span size mismatch",
-                                          {"residual=" + std::to_string(residual.size()),
-                                           "out=" + std::to_string(out.size()),
-                                           "dofs=" + std::to_string(system.dof_count)}));
+        return std::unexpected(
+            make_error("preconditioner span size mismatch",
+                       {"residual=" + std::to_string(residual.size()), "out=" + std::to_string(out.size()),
+                        "dofs=" + std::to_string(system.dof_count)}));
     }
 
     auto inverse = block_inverse_view(workspace, system);
     for (std::size_t node = 0; node < system.node_count; ++node)
     {
-        const auto block_base = node * 9U;
-        const auto dof_base = node * 3U;
-        std::array<double, 3> r{
-            static_cast<double>(residual[dof_base + 0U]),
-            static_cast<double>(residual[dof_base + 1U]),
-            static_cast<double>(residual[dof_base + 2U])
-        };
+        const auto            block_base = node * 9U;
+        const auto            dof_base   = node * 3U;
+        std::array<double, 3> r{static_cast<double>(residual[dof_base + 0U]),
+                                static_cast<double>(residual[dof_base + 1U]),
+                                static_cast<double>(residual[dof_base + 2U])};
         std::array<double, 3> z{};
         for (std::size_t axis = 0; axis < 3U; ++axis)
         {
@@ -482,9 +483,9 @@ auto build_block_jacobi_inverse(const MatrixFreeSystem &system, MatrixFreeWorksp
     const auto required = system.node_count * 9U;
     if (out_inverse.size() < required)
     {
-        return std::unexpected(make_error("block inverse span too small",
-                                          {"required=" + std::to_string(required),
-                                           "available=" + std::to_string(out_inverse.size())}));
+        return std::unexpected(
+            make_error("block inverse span too small", {"required=" + std::to_string(required),
+                                                        "available=" + std::to_string(out_inverse.size())}));
     }
 
     if (auto ensured = ensure_workspace(workspace, system); !ensured)
@@ -508,10 +509,10 @@ auto build_block_jacobi_inverse(const MatrixFreeSystem &system, MatrixFreeWorksp
 {
     if (input.size() != system.dof_count || output.size() != system.dof_count)
     {
-        return std::unexpected(make_error("input/output span size mismatch",
-                                          {"input=" + std::to_string(input.size()),
-                                           "output=" + std::to_string(output.size()),
-                                           "dofs=" + std::to_string(system.dof_count)}));
+        return std::unexpected(
+            make_error("input/output span size mismatch",
+                       {"input=" + std::to_string(input.size()), "output=" + std::to_string(output.size()),
+                        "dofs=" + std::to_string(system.dof_count)}));
     }
 
     if (auto valid = validate_system(system); !valid)
@@ -524,7 +525,7 @@ auto build_block_jacobi_inverse(const MatrixFreeSystem &system, MatrixFreeWorksp
         return ensured;
     }
 
-    auto sanitized = sanitized_view(workspace, system);
+    auto sanitized    = sanitized_view(workspace, system);
     auto accumulation = accumulator_view(workspace, system);
 
     for (std::size_t dof = 0; dof < system.dof_count; ++dof)
@@ -548,36 +549,36 @@ auto build_block_jacobi_inverse(const MatrixFreeSystem &system, MatrixFreeWorksp
     std::fill(accumulation.begin(), accumulation.end(), 0.0);
 
     constexpr std::size_t kLocalNodes = 4U;
-    constexpr std::size_t kLocalDofs = 12U;
-    constexpr std::size_t kStrain = 6U;
+    constexpr std::size_t kLocalDofs  = 12U;
+    constexpr std::size_t kStrain     = 6U;
 
     std::array<double, kStrain * kLocalDofs> B{};
     std::array<double, kStrain * kLocalDofs> DB{};
-    std::array<double, kLocalDofs> local_u{};
-    std::array<double, kStrain>    strain{};
-    std::array<double, kStrain>    stress{};
-    std::array<double, kLocalDofs> local_force{};
+    std::array<double, kLocalDofs>           local_u{};
+    std::array<double, kStrain>              strain{};
+    std::array<double, kStrain>              stress{};
+    std::array<double, kLocalDofs>           local_force{};
 
     for (std::size_t element = 0; element < system.element_count; ++element)
     {
         const auto connectivity_base = connectivity_offset(element);
-        const auto gradient_base = element_gradient_offset(element);
-        const auto material_index = system.element_material_index[element];
+        const auto gradient_base     = element_gradient_offset(element);
+        const auto material_index    = system.element_material_index[element];
         if (material_index >= system.materials.size())
         {
-            return std::unexpected(make_error("element references material out of range",
-                                              {"element=" + std::to_string(element),
-                                               "material_index=" + std::to_string(material_index)}));
+            return std::unexpected(make_error(
+                "element references material out of range",
+                {"element=" + std::to_string(element), "material_index=" + std::to_string(material_index)}));
         }
 
         B.fill(0.0);
         for (std::size_t local = 0; local < kLocalNodes; ++local)
         {
-            const auto grad_index = gradient_base + local * 3U;
-            const double gx = static_cast<double>(system.element_gradients[grad_index + 0U]);
-            const double gy = static_cast<double>(system.element_gradients[grad_index + 1U]);
-            const double gz = static_cast<double>(system.element_gradients[grad_index + 2U]);
-            const auto col = local * 3U;
+            const auto   grad_index       = gradient_base + local * 3U;
+            const double gx               = static_cast<double>(system.element_gradients[grad_index + 0U]);
+            const double gy               = static_cast<double>(system.element_gradients[grad_index + 1U]);
+            const double gz               = static_cast<double>(system.element_gradients[grad_index + 2U]);
+            const auto   col              = local * 3U;
             B[0U * kLocalDofs + col + 0U] = gx;
             B[1U * kLocalDofs + col + 1U] = gy;
             B[2U * kLocalDofs + col + 2U] = gz;
@@ -608,9 +609,9 @@ auto build_block_jacobi_inverse(const MatrixFreeSystem &system, MatrixFreeWorksp
             const auto node_index = system.element_connectivity[connectivity_base + local];
             if (node_index >= system.node_count)
             {
-                return std::unexpected(make_error("element connectivity references node out of range",
-                                                  {"element=" + std::to_string(element),
-                                                   "node=" + std::to_string(node_index)}));
+                return std::unexpected(
+                    make_error("element connectivity references node out of range",
+                               {"element=" + std::to_string(element), "node=" + std::to_string(node_index)}));
             }
             const auto dof_base = node_index * 3U;
             for (std::size_t axis = 0; axis < 3U; ++axis)
@@ -653,7 +654,7 @@ auto build_block_jacobi_inverse(const MatrixFreeSystem &system, MatrixFreeWorksp
         for (std::size_t local = 0; local < kLocalNodes; ++local)
         {
             const auto node_index = system.element_connectivity[connectivity_base + local];
-            const auto dof_base = node_index * 3U;
+            const auto dof_base   = node_index * 3U;
             for (std::size_t axis = 0; axis < 3U; ++axis)
             {
                 accumulation[dof_base + axis] += local_force[local * 3U + axis];
@@ -663,7 +664,7 @@ auto build_block_jacobi_inverse(const MatrixFreeSystem &system, MatrixFreeWorksp
 
     for (std::size_t node = 0; node < system.node_count; ++node)
     {
-        const double mass = static_cast<double>(system.lumped_mass[node]) * system.mass_factor;
+        const double mass     = static_cast<double>(system.lumped_mass[node]) * system.mass_factor;
         const auto   dof_base = node * 3U;
         for (std::size_t axis = 0; axis < 3U; ++axis)
         {
@@ -704,22 +705,22 @@ auto build_block_jacobi_inverse(const MatrixFreeSystem &system, MatrixFreeWorksp
 
     if (rhs.size() != system.dof_count)
     {
-        return std::unexpected(make_error("rhs span size mismatch",
-                                          {"rhs=" + std::to_string(rhs.size()),
-                                           "dofs=" + std::to_string(system.dof_count)}));
+        return std::unexpected(
+            make_error("rhs span size mismatch",
+                       {"rhs=" + std::to_string(rhs.size()), "dofs=" + std::to_string(system.dof_count)}));
     }
 
     if (vectors.solution.size() != system.dof_count || vectors.residual.size() != system.dof_count ||
-        vectors.search_direction.size() != system.dof_count || vectors.preconditioned.size() != system.dof_count ||
-        vectors.matvec.size() != system.dof_count)
+        vectors.search_direction.size() != system.dof_count ||
+        vectors.preconditioned.size() != system.dof_count || vectors.matvec.size() != system.dof_count)
     {
-        return std::unexpected(make_error("solver vector span size mismatch",
-                                          {"solution=" + std::to_string(vectors.solution.size()),
-                                           "residual=" + std::to_string(vectors.residual.size()),
-                                           "search_direction=" + std::to_string(vectors.search_direction.size()),
-                                           "preconditioned=" + std::to_string(vectors.preconditioned.size()),
-                                           "matvec=" + std::to_string(vectors.matvec.size()),
-                                           "dofs=" + std::to_string(system.dof_count)}));
+        return std::unexpected(make_error(
+            "solver vector span size mismatch",
+            {"solution=" + std::to_string(vectors.solution.size()),
+             "residual=" + std::to_string(vectors.residual.size()),
+             "search_direction=" + std::to_string(vectors.search_direction.size()),
+             "preconditioned=" + std::to_string(vectors.preconditioned.size()),
+             "matvec=" + std::to_string(vectors.matvec.size()), "dofs=" + std::to_string(system.dof_count)}));
     }
 
     if (auto ensured = ensure_workspace(workspace, system); !ensured)
@@ -727,7 +728,7 @@ auto build_block_jacobi_inverse(const MatrixFreeSystem &system, MatrixFreeWorksp
         return std::unexpected(ensured.error());
     }
 
-    const auto block = std::max<std::size_t>(1U, system.reduction_block);
+    const auto block             = std::max<std::size_t>(1U, system.reduction_block);
     const auto required_partials = chunk_count(system.dof_count, block);
     if (vectors.partials.size() < required_partials)
     {
@@ -751,8 +752,9 @@ auto build_block_jacobi_inverse(const MatrixFreeSystem &system, MatrixFreeWorksp
         return std::unexpected(prepared.error());
     }
 
-    if (auto matvec_status = apply_keff(system, std::span<const float>{vectors.solution.data(), system.dof_count},
-                                        vectors.matvec, workspace);
+    if (auto matvec_status =
+            apply_keff(system, std::span<const float>{vectors.solution.data(), system.dof_count},
+                       vectors.matvec, workspace);
         !matvec_status)
     {
         return std::unexpected(matvec_status.error());
@@ -785,17 +787,18 @@ auto build_block_jacobi_inverse(const MatrixFreeSystem &system, MatrixFreeWorksp
 
     PcgTelemetry telemetry{};
     telemetry.residual_norm = residual_norm;
-    telemetry.rhs_norm = std::sqrt(rhs_norm_sq.value());
+    telemetry.rhs_norm      = std::sqrt(rhs_norm_sq.value());
 
     const double tolerance = settings.relative_tolerance * rhs_norm;
     if (residual_norm <= tolerance)
     {
-        telemetry.converged = true;
+        telemetry.converged  = true;
         telemetry.iterations = 0U;
         return telemetry;
     }
 
-    if (auto precond_status = apply_preconditioner(system, vectors.residual, vectors.preconditioned, workspace);
+    if (auto precond_status =
+            apply_preconditioner(system, vectors.residual, vectors.preconditioned, workspace);
         !precond_status)
     {
         return std::unexpected(precond_status.error());
@@ -829,9 +832,9 @@ auto build_block_jacobi_inverse(const MatrixFreeSystem &system, MatrixFreeWorksp
 
     for (std::size_t iteration = 0; iteration < settings.max_iterations; ++iteration)
     {
-        auto matvec_result = apply_keff(system,
-                                        std::span<const float>{vectors.search_direction.data(), system.dof_count},
-                                        vectors.matvec, workspace);
+        auto matvec_result =
+            apply_keff(system, std::span<const float>{vectors.search_direction.data(), system.dof_count},
+                       vectors.matvec, workspace);
         if (!matvec_result)
         {
             return std::unexpected(matvec_result.error());
@@ -845,15 +848,17 @@ auto build_block_jacobi_inverse(const MatrixFreeSystem &system, MatrixFreeWorksp
         double denom = denom_value.value();
         if (std::abs(denom) < 1.0e-18)
         {
-            return std::unexpected(make_error("CG denominator approached zero", {"iteration=" + std::to_string(iteration)}));
+            return std::unexpected(
+                make_error("CG denominator approached zero", {"iteration=" + std::to_string(iteration)}));
         }
 
-        const double alpha = rho / denom;
+        const double alpha   = rho / denom;
         telemetry.alpha_last = alpha;
 
         for (std::size_t dof = 0; dof < system.dof_count; ++dof)
         {
-            vectors.solution[dof] += static_cast<float>(alpha * static_cast<double>(vectors.search_direction[dof]));
+            vectors.solution[dof] +=
+                static_cast<float>(alpha * static_cast<double>(vectors.search_direction[dof]));
             vectors.residual[dof] -= static_cast<float>(alpha * static_cast<double>(vectors.matvec[dof]));
         }
 
@@ -864,9 +869,9 @@ auto build_block_jacobi_inverse(const MatrixFreeSystem &system, MatrixFreeWorksp
         {
             return std::unexpected(res_norm_sq.error());
         }
-        residual_norm = std::sqrt(res_norm_sq.value());
+        residual_norm           = std::sqrt(res_norm_sq.value());
         telemetry.residual_norm = residual_norm;
-        telemetry.iterations = iteration + 1U;
+        telemetry.iterations    = iteration + 1U;
 
         if (residual_norm <= tolerance)
         {
@@ -874,13 +879,15 @@ auto build_block_jacobi_inverse(const MatrixFreeSystem &system, MatrixFreeWorksp
             break;
         }
 
-        if (auto precond_again = apply_preconditioner(system, vectors.residual, vectors.preconditioned, workspace);
+        if (auto precond_again =
+                apply_preconditioner(system, vectors.residual, vectors.preconditioned, workspace);
             !precond_again)
         {
             return std::unexpected(precond_again.error());
         }
 
-        auto rho_new_value = dot_accumulate(system, vectors.residual, vectors.preconditioned, vectors.partials);
+        auto rho_new_value =
+            dot_accumulate(system, vectors.residual, vectors.preconditioned, vectors.partials);
         if (!rho_new_value)
         {
             return std::unexpected(rho_new_value.error());
@@ -888,16 +895,18 @@ auto build_block_jacobi_inverse(const MatrixFreeSystem &system, MatrixFreeWorksp
         const double rho_new = rho_new_value.value();
         if (std::abs(rho) < 1.0e-18)
         {
-            return std::unexpected(make_error("CG rho approached zero", {"iteration=" + std::to_string(iteration)}));
+            return std::unexpected(
+                make_error("CG rho approached zero", {"iteration=" + std::to_string(iteration)}));
         }
-        const double beta = rho_new / rho;
+        const double beta   = rho_new / rho;
         telemetry.beta_last = beta;
-        rho = rho_new;
+        rho                 = rho_new;
 
         for (std::size_t dof = 0; dof < system.dof_count; ++dof)
         {
-            vectors.search_direction[dof] = static_cast<float>(static_cast<double>(vectors.preconditioned[dof]) +
-                                                              beta * static_cast<double>(vectors.search_direction[dof]));
+            vectors.search_direction[dof] =
+                static_cast<float>(static_cast<double>(vectors.preconditioned[dof]) +
+                                   beta * static_cast<double>(vectors.search_direction[dof]));
         }
 
         for (std::size_t node = 0; node < system.node_count; ++node)

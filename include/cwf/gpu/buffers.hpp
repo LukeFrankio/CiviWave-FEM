@@ -35,7 +35,7 @@ namespace cwf::gpu::buffers
  */
 struct PreparedGpuBuffers
 {
-    std::vector<float>        material_stiffness_fp32; ///< converted 6x6 tensors (materials * 36 floats)
+    std::vector<float>         material_stiffness_fp32; ///< converted 6x6 tensors (materials * 36 floats)
     std::vector<std::uint32_t> adjacency_local_indices; ///< CSR local indices widened to uint32
 };
 
@@ -44,9 +44,9 @@ struct PreparedGpuBuffers
  */
 struct LogicalBuffer
 {
-    std::string              name;      ///< stable identifier ("elements.connectivity", etc.)
-    std::span<const std::byte> bytes;   ///< read-only view into CPU storage
-    std::size_t              alignment; ///< alignment requirement (power-of-two, usually 256)
+    std::string                name;      ///< stable identifier ("elements.connectivity", etc.)
+    std::span<const std::byte> bytes;     ///< read-only view into CPU storage
+    std::size_t                alignment; ///< alignment requirement (power-of-two, usually 256)
 };
 
 /**
@@ -60,9 +60,9 @@ struct LogicalBuffer
  * @param[in] alignment alignment to request for each buffer (defaults to descriptor-friendly 256 bytes)
  * @return vector of logical buffer descriptors ready for sharding/upload planning
  */
-[[nodiscard]] auto build_logical_buffers(const mesh::pack::PackingResult &packing,
+[[nodiscard]] auto build_logical_buffers(const mesh::pack::PackingResult                       &packing,
                                          std::span<const physics::materials::ElasticProperties> materials,
-                                         PreparedGpuBuffers &prepared,
+                                         PreparedGpuBuffers                                    &prepared,
                                          std::size_t alignment = shard::kDefaultAlignment)
     -> std::vector<LogicalBuffer>;
 

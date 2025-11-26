@@ -24,18 +24,18 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <filesystem>
 #include <initializer_list>
 #include <memory>
 #include <span>
 #include <string>
 #include <string_view>
 #include <vector>
-#include <filesystem>
 
 #include "cwf/config/config.hpp"
 #include "cwf/gpu/device_buffers.hpp"
-#include "cwf/gpu/vulkan_context.hpp"
 #include "cwf/gpu/pcg.hpp"
+#include "cwf/gpu/vulkan_context.hpp"
 #include "cwf/mesh/pack.hpp"
 #include "cwf/physics/materials.hpp"
 #include "cwf/physics/newmark.hpp"
@@ -48,8 +48,8 @@ namespace cwf::gpu::newmark
  */
 struct StepError
 {
-    std::string              message;  ///< spicy summary of what went sideways
-    std::vector<std::string> context;  ///< breadcrumb trail (stage, value, etc.)
+    std::string              message; ///< spicy summary of what went sideways
+    std::vector<std::string> context; ///< breadcrumb trail (stage, value, etc.)
 };
 
 /**
@@ -57,9 +57,9 @@ struct StepError
  */
 struct AdaptivePolicy
 {
-    double low_iteration_ratio{0.3};   ///< boost dt when iterations <= ratio * max_iters
-    double increase_factor{1.1};       ///< multiplicative dt growth when convergence is easy
-    double decrease_factor{0.5};       ///< multiplicative dt shrink when solver stagnates
+    double low_iteration_ratio{0.3}; ///< boost dt when iterations <= ratio * max_iters
+    double increase_factor{1.1};     ///< multiplicative dt growth when convergence is easy
+    double decrease_factor{0.5};     ///< multiplicative dt shrink when solver stagnates
 };
 
 /**
@@ -67,15 +67,15 @@ struct AdaptivePolicy
  */
 struct StepTelemetry
 {
-    double              simulation_time{};  ///< time at the beginning of the step [s]
-    double              time_step{};        ///< dt used for the solve (before adaptation)
-    double              applied_tolerance{};///< solver tolerance for this frame
-    bool                paused_mode{};      ///< true when pause tolerance was selected
-    bool                dt_increased{};     ///< true when adaptive logic bumped dt up
-    bool                dt_decreased{};     ///< true when adaptive logic shrank dt
-    bool                dt_clamped_min{};   ///< true when dt hit the configured min bound
-    bool                dt_clamped_max{};   ///< true when dt hit the configured max bound
-    pcg::PcgTelemetry   pcg{};              ///< raw PCG statistics (iterations, norms, etc.)
+    double            simulation_time{};   ///< time at the beginning of the step [s]
+    double            time_step{};         ///< dt used for the solve (before adaptation)
+    double            applied_tolerance{}; ///< solver tolerance for this frame
+    bool              paused_mode{};       ///< true when pause tolerance was selected
+    bool              dt_increased{};      ///< true when adaptive logic bumped dt up
+    bool              dt_decreased{};      ///< true when adaptive logic shrank dt
+    bool              dt_clamped_min{};    ///< true when dt hit the configured min bound
+    bool              dt_clamped_max{};    ///< true when dt hit the configured max bound
+    pcg::PcgTelemetry pcg{};               ///< raw PCG statistics (iterations, norms, etc.)
 };
 
 /**
@@ -91,7 +91,7 @@ struct StepTelemetry
  */
 class Stepper
 {
-public:
+  public:
     /**
      * @brief glue packed buffers + Rayleigh damping + solver knobs into a ready-to-run stepper
      *
@@ -100,12 +100,10 @@ public:
      * seeds predictor buffers, and wires @ref pcg::MatrixFreeSystem views so each call to
      * step() can blast through predictor → RHS → PCG → update without extra setup.
      */
-    Stepper(mesh::pack::PackingResult &packing,
-        std::span<const physics::materials::ElasticProperties> materials,
-        physics::materials::RayleighCoefficients rayleigh,
-        const config::SolverSettings &solver_settings,
-        const config::TimeSettings &time_settings,
-        AdaptivePolicy adaptive_policy = {});
+    Stepper(mesh::pack::PackingResult                             &packing,
+            std::span<const physics::materials::ElasticProperties> materials,
+            physics::materials::RayleighCoefficients rayleigh, const config::SolverSettings &solver_settings,
+            const config::TimeSettings &time_settings, AdaptivePolicy adaptive_policy = {});
 
     ~Stepper();
 
@@ -117,15 +115,33 @@ public:
      * switches tolerance per spec (tighten when user is scrubbing), otherwise runtime tol.
      */
     [[nodiscard]] auto step(double simulation_time_seconds, bool paused_mode = false)
-    -> std::expected<StepTelemetry, StepError>;
+        -> std::expected<StepTelemetry, StepError>;
 
-    [[nodiscard]] auto current_time() const noexcept -> double { return accumulated_time_; }
-    [[nodiscard]] auto time_step() const noexcept -> double { return current_dt_; }
-    [[nodiscard]] auto node_count() const noexcept -> std::size_t { return node_count_; }
-    [[nodiscard]] auto dof_count() const noexcept -> std::size_t { return dof_count_; }
+    [[nodiscard]] auto current_time() const noexcept -> double
+    {
+        return accumulated_time_;
+    }
+    [[nodiscard]] auto time_step() const noexcept -> double
+    {
+        return current_dt_;
+    }
+    [[nodiscard]] auto node_count() const noexcept -> std::size_t
+    {
+        return node_count_;
+    }
+    [[nodiscard]] auto dof_count() const noexcept -> std::size_t
+    {
+        return dof_count_;
+    }
 
-    void set_warm_start(bool enabled) noexcept { warm_start_enabled_ = enabled; }
-    [[nodiscard]] auto warm_start_enabled() const noexcept -> bool { return warm_start_enabled_; }
+    void set_warm_start(bool enabled) noexcept
+    {
+        warm_start_enabled_ = enabled;
+    }
+    [[nodiscard]] auto warm_start_enabled() const noexcept -> bool
+    {
+        return warm_start_enabled_;
+    }
 
     /**
      * @brief wires the stepper to a Vulkan runtime so the implicit solve can run on GPU uwu
@@ -138,8 +154,9 @@ public:
                                   const std::filesystem::path &shader_directory)
         -> std::expected<void, StepError>;
 
-private:
-    [[nodiscard]] static auto make_error(std::string message, std::initializer_list<std::string> ctx = {}) -> StepError;
+  private:
+    [[nodiscard]] static auto make_error(std::string message, std::initializer_list<std::string> ctx = {})
+        -> StepError;
     [[nodiscard]] static constexpr auto axis_bit(std::size_t axis) noexcept -> std::uint32_t;
 
     mesh::pack::PackingResult *packing_{}; ///< non-owning pointer (caller owns buffers)
@@ -162,12 +179,12 @@ private:
     mesh::pack::Float3SoA predicted_displacement_{};
     mesh::pack::Float3SoA predicted_velocity_{};
 
-    double current_dt_{};
-    double accumulated_time_{0.0};
+    double      current_dt_{};
+    double      accumulated_time_{0.0};
     std::size_t frame_index_{0};
-    bool warm_start_enabled_{true};
-    double beta_{0.25};
-    double gamma_{0.5};
+    bool        warm_start_enabled_{true};
+    double      beta_{0.25};
+    double      gamma_{0.5};
 
     physics::newmark::Coefficients  coeffs_{};
     physics::newmark::UpdateScalars update_scalars_{};
@@ -179,13 +196,13 @@ private:
     std::unique_ptr<GpuRuntime> gpu_runtime_{};
 
     [[nodiscard]] auto assemble_rhs() -> std::expected<void, StepError>;
-    void clamp_dirichlet_rhs();
-    void write_predictor();
-    void apply_state_update();
-    void refresh_coefficients();
-    void update_matrix_free_scalars();
-    void adapt_timestep(const pcg::PcgTelemetry &pcg_stats, StepTelemetry &telemetry);
-    void flatten_external_force();
+    void               clamp_dirichlet_rhs();
+    void               write_predictor();
+    void               apply_state_update();
+    void               refresh_coefficients();
+    void               update_matrix_free_scalars();
+    void               adapt_timestep(const pcg::PcgTelemetry &pcg_stats, StepTelemetry &telemetry);
+    void               flatten_external_force();
     [[nodiscard]] auto node_buffers() -> mesh::pack::NodeBuffers &;
 };
 

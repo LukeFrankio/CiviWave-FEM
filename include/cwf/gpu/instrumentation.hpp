@@ -42,7 +42,6 @@
 #include <string_view>
 #include <utility>
 #include <vector>
-
 #include <vulkan/vulkan.h>
 
 #include "cwf/gpu/pcg.hpp"
@@ -60,8 +59,8 @@ namespace cwf::gpu::instrumentation
  */
 struct InstrumentationError
 {
-    std::string              message;  ///< human-readable summary with gen-z vibes
-    std::vector<std::string> context;  ///< breadcrumb trail for debugging
+    std::string              message;            ///< human-readable summary with gen-z vibes
+    std::vector<std::string> context;            ///< breadcrumb trail for debugging
     VkResult                 result{VK_SUCCESS}; ///< underlying Vulkan error if applicable
 };
 
@@ -72,10 +71,10 @@ struct InstrumentationError
  */
 struct PassTiming
 {
-    std::string name;           ///< pass identifier (e.g., "predictor", "pcg_solve", "update")
-    double      duration_ms{0.0}; ///< elapsed time in milliseconds (FP64 for precision)
-    std::uint64_t start_tick{0U}; ///< raw GPU timestamp at pass start
-    std::uint64_t end_tick{0U};   ///< raw GPU timestamp at pass end
+    std::string   name;             ///< pass identifier (e.g., "predictor", "pcg_solve", "update")
+    double        duration_ms{0.0}; ///< elapsed time in milliseconds (FP64 for precision)
+    std::uint64_t start_tick{0U};   ///< raw GPU timestamp at pass start
+    std::uint64_t end_tick{0U};     ///< raw GPU timestamp at pass end
 };
 
 /**
@@ -85,28 +84,28 @@ struct PassTiming
  */
 struct FrameLog
 {
-    std::uint64_t frame_index{0U};          ///< monotonic frame counter
-    double        simulation_time_s{0.0};   ///< current simulation time in seconds
-    double        time_step_s{0.0};         ///< dt used for this frame
-    double        solver_tolerance{0.0};    ///< applied PCG tolerance
-    bool          paused_mode{false};       ///< whether pause tolerance was used
+    std::uint64_t frame_index{0U};        ///< monotonic frame counter
+    double        simulation_time_s{0.0}; ///< current simulation time in seconds
+    double        time_step_s{0.0};       ///< dt used for this frame
+    double        solver_tolerance{0.0};  ///< applied PCG tolerance
+    bool          paused_mode{false};     ///< whether pause tolerance was used
 
-    std::vector<PassTiming> pass_timings;   ///< per-pass GPU timings
+    std::vector<PassTiming> pass_timings; ///< per-pass GPU timings
 
     // PCG solver statistics (mirrors pcg::PcgTelemetry)
-    std::size_t pcg_iterations{0U};         ///< iterations executed
-    double      pcg_residual_norm{0.0};     ///< ||r||_2 at exit
-    double      pcg_rhs_norm{0.0};          ///< ||rhs||_2 baseline
-    bool        pcg_converged{false};       ///< whether solver converged
+    std::size_t pcg_iterations{0U};     ///< iterations executed
+    double      pcg_residual_norm{0.0}; ///< ||r||_2 at exit
+    double      pcg_rhs_norm{0.0};      ///< ||rhs||_2 baseline
+    bool        pcg_converged{false};   ///< whether solver converged
 
     // adaptive timestep flags
-    bool        dt_increased{false};        ///< timestep was increased this frame
-    bool        dt_decreased{false};        ///< timestep was decreased this frame
-    bool        dt_clamped_min{false};      ///< timestep hit minimum bound
-    bool        dt_clamped_max{false};      ///< timestep hit maximum bound
+    bool dt_increased{false};   ///< timestep was increased this frame
+    bool dt_decreased{false};   ///< timestep was decreased this frame
+    bool dt_clamped_min{false}; ///< timestep hit minimum bound
+    bool dt_clamped_max{false}; ///< timestep hit maximum bound
 
     // wall clock timing
-    double      wall_clock_ms{0.0};         ///< total frame time measured on CPU
+    double wall_clock_ms{0.0}; ///< total frame time measured on CPU
 };
 
 /**
@@ -116,14 +115,14 @@ struct FrameLog
  */
 struct InstrumentationConfig
 {
-    bool        enable_gpu_timestamps{true};    ///< record Vulkan timestamp queries
-    bool        enable_yaml_logging{true};      ///< write per-frame YAML logs
-    bool        enable_rgp_markers{true};       ///< emit VK_EXT_debug_utils labels
-    bool        enable_tracy{false};            ///< connect to Tracy profiler (compile-time gated)
-    std::size_t max_passes{32U};                ///< maximum number of passes to timestamp per frame
-    std::filesystem::path log_directory{};      ///< where to write YAML logs (empty = disabled)
-    std::string_view log_prefix{"frame_"};      ///< prefix for log filenames
-    std::size_t log_stride{1U};                 ///< write logs every N frames (1 = every frame)
+    bool                  enable_gpu_timestamps{true}; ///< record Vulkan timestamp queries
+    bool                  enable_yaml_logging{true};   ///< write per-frame YAML logs
+    bool                  enable_rgp_markers{true};    ///< emit VK_EXT_debug_utils labels
+    bool                  enable_tracy{false};         ///< connect to Tracy profiler (compile-time gated)
+    std::size_t           max_passes{32U};             ///< maximum number of passes to timestamp per frame
+    std::filesystem::path log_directory{};             ///< where to write YAML logs (empty = disabled)
+    std::string_view      log_prefix{"frame_"};        ///< prefix for log filenames
+    std::size_t           log_stride{1U};              ///< write logs every N frames (1 = every frame)
 };
 
 /**
@@ -144,7 +143,7 @@ struct InstrumentationConfig
  */
 class GpuTimestamps
 {
-public:
+  public:
     GpuTimestamps() = default;
 
     /**
@@ -159,7 +158,7 @@ public:
     [[nodiscard]] static auto create(const VulkanContext &context, std::size_t max_passes = 32U)
         -> std::expected<GpuTimestamps, InstrumentationError>;
 
-    GpuTimestamps(const GpuTimestamps &) = delete;
+    GpuTimestamps(const GpuTimestamps &)                     = delete;
     auto operator=(const GpuTimestamps &) -> GpuTimestamps & = delete;
 
     GpuTimestamps(GpuTimestamps &&other) noexcept;
@@ -212,22 +211,28 @@ public:
     /**
      * @brief returns the maximum number of passes this pool supports
      */
-    [[nodiscard]] auto max_passes() const noexcept -> std::size_t { return max_passes_; }
+    [[nodiscard]] auto max_passes() const noexcept -> std::size_t
+    {
+        return max_passes_;
+    }
 
     /**
      * @brief returns the number of passes recorded this frame
      */
-    [[nodiscard]] auto pass_count() const noexcept -> std::size_t { return pass_count_; }
+    [[nodiscard]] auto pass_count() const noexcept -> std::size_t
+    {
+        return pass_count_;
+    }
 
-private:
-    VkDevice        device_{VK_NULL_HANDLE};
-    VkQueryPool     query_pool_{VK_NULL_HANDLE};
-    std::size_t     max_passes_{0U};
-    std::size_t     pass_count_{0U};
-    float           timestamp_period_ns_{1.0F}; ///< nanoseconds per tick
-    std::uint32_t   timestamp_valid_bits_{64U}; ///< valid bits in timestamp
+  private:
+    VkDevice      device_{VK_NULL_HANDLE};
+    VkQueryPool   query_pool_{VK_NULL_HANDLE};
+    std::size_t   max_passes_{0U};
+    std::size_t   pass_count_{0U};
+    float         timestamp_period_ns_{1.0F}; ///< nanoseconds per tick
+    std::uint32_t timestamp_valid_bits_{64U}; ///< valid bits in timestamp
 
-    std::vector<std::string> pass_names_;       ///< recorded pass names (indexed by pass)
+    std::vector<std::string>   pass_names_;     ///< recorded pass names (indexed by pass)
     std::vector<std::uint64_t> raw_timestamps_; ///< staging buffer for query results
 
     void destroy();
@@ -247,7 +252,7 @@ private:
  */
 class FrameLogger
 {
-public:
+  public:
     FrameLogger() = default;
 
     /**
@@ -267,8 +272,8 @@ public:
      * @param tolerance applied solver tolerance
      * @param paused whether pause mode is active
      */
-    void begin_frame(std::uint64_t frame_index, double simulation_time,
-                     double time_step, double tolerance, bool paused);
+    void begin_frame(std::uint64_t frame_index, double simulation_time, double time_step, double tolerance,
+                     bool paused);
 
     /**
      * @brief records a single pass timing
@@ -313,22 +318,31 @@ public:
     /**
      * @brief returns the current frame log (read-only)
      */
-    [[nodiscard]] auto current_log() const noexcept -> const FrameLog & { return current_; }
+    [[nodiscard]] auto current_log() const noexcept -> const FrameLog &
+    {
+        return current_;
+    }
 
     /**
      * @brief enables or disables YAML output
      */
-    void set_enabled(bool enabled) noexcept { enabled_ = enabled; }
+    void set_enabled(bool enabled) noexcept
+    {
+        enabled_ = enabled;
+    }
 
     /**
      * @brief checks if logging is currently enabled
      */
-    [[nodiscard]] auto enabled() const noexcept -> bool { return enabled_; }
+    [[nodiscard]] auto enabled() const noexcept -> bool
+    {
+        return enabled_;
+    }
 
-private:
-    InstrumentationConfig config_{};
-    FrameLog              current_{};
-    bool                  enabled_{true};
+  private:
+    InstrumentationConfig                 config_{};
+    FrameLog                              current_{};
+    bool                                  enabled_{true};
     std::chrono::steady_clock::time_point frame_start_{};
 
     void write_yaml() const;
@@ -350,7 +364,7 @@ private:
  */
 class ScopedGpuPass
 {
-public:
+  public:
     /**
      * @brief begins a timestamped pass
      *
@@ -364,14 +378,14 @@ public:
 
     ~ScopedGpuPass();
 
-    ScopedGpuPass(const ScopedGpuPass &) = delete;
+    ScopedGpuPass(const ScopedGpuPass &)                     = delete;
     auto operator=(const ScopedGpuPass &) -> ScopedGpuPass & = delete;
-    ScopedGpuPass(ScopedGpuPass &&) = delete;
-    auto operator=(ScopedGpuPass &&) -> ScopedGpuPass & = delete;
+    ScopedGpuPass(ScopedGpuPass &&)                          = delete;
+    auto operator=(ScopedGpuPass &&) -> ScopedGpuPass &      = delete;
 
-private:
-    GpuTimestamps *timestamps_;
-    VkCommandBuffer cmd_;
+  private:
+    GpuTimestamps        *timestamps_;
+    VkCommandBuffer       cmd_;
     VkPipelineStageFlags2 stage_;
 };
 
@@ -391,7 +405,7 @@ private:
  */
 class ScopedRgpLabel
 {
-public:
+  public:
     /**
      * @brief pushes a debug label onto the command buffer
      *
@@ -405,14 +419,14 @@ public:
 
     ~ScopedRgpLabel();
 
-    ScopedRgpLabel(const ScopedRgpLabel &) = delete;
+    ScopedRgpLabel(const ScopedRgpLabel &)                     = delete;
     auto operator=(const ScopedRgpLabel &) -> ScopedRgpLabel & = delete;
-    ScopedRgpLabel(ScopedRgpLabel &&) = delete;
-    auto operator=(ScopedRgpLabel &&) -> ScopedRgpLabel & = delete;
+    ScopedRgpLabel(ScopedRgpLabel &&)                          = delete;
+    auto operator=(ScopedRgpLabel &&) -> ScopedRgpLabel &      = delete;
 
-private:
+  private:
     const VulkanContext *context_;
-    VkCommandBuffer cmd_;
+    VkCommandBuffer      cmd_;
 };
 
 // -----------------------------------------------------------------------------
@@ -430,16 +444,16 @@ private:
  */
 class TracyCpuZone
 {
-public:
+  public:
     explicit TracyCpuZone(std::string_view name);
     ~TracyCpuZone();
 
-    TracyCpuZone(const TracyCpuZone &) = delete;
+    TracyCpuZone(const TracyCpuZone &)                     = delete;
     auto operator=(const TracyCpuZone &) -> TracyCpuZone & = delete;
-    TracyCpuZone(TracyCpuZone &&) = delete;
-    auto operator=(TracyCpuZone &&) -> TracyCpuZone & = delete;
+    TracyCpuZone(TracyCpuZone &&)                          = delete;
+    auto operator=(TracyCpuZone &&) -> TracyCpuZone &      = delete;
 
-private:
+  private:
     void *zone_ctx_{nullptr}; // opaque Tracy context
 };
 
@@ -453,14 +467,19 @@ private:
 void tracy_submit_frame_log(const FrameLog &log);
 
 /// Convenience macro for Tracy CPU zone in the current scope
-#define CWF_TRACY_ZONE(name) ::cwf::gpu::instrumentation::TracyCpuZone _tracy_zone_##__LINE__{name}
+#define CWF_TRACY_ZONE(name)                                                                                 \
+    ::cwf::gpu::instrumentation::TracyCpuZone _tracy_zone_##__LINE__                                         \
+    {                                                                                                        \
+        name                                                                                                 \
+    }
 
 #else // !CWF_ENABLE_TRACY
 
 /// No-op when Tracy is disabled
-#define CWF_TRACY_ZONE(name) (void)0
+#define CWF_TRACY_ZONE(name) (void) 0
 
-inline void tracy_submit_frame_log(const FrameLog &) {}
+inline void tracy_submit_frame_log(const FrameLog &)
+{}
 
 #endif // CWF_ENABLE_TRACY
 

@@ -3,16 +3,15 @@
  * @brief regression tests for Phase 10 derived field calculator uwu
  */
 
-#include <gtest/gtest.h>
-
 #include <array>
 #include <cmath>
 #include <filesystem>
+#include <gtest/gtest.h>
 #include <limits>
 #include <vector>
 
-#include "cwf/config/config.hpp"
 #include "cwf/common/math.hpp"
+#include "cwf/config/config.hpp"
 #include "cwf/mesh/mesh.hpp"
 #include "cwf/mesh/pack.hpp"
 #include "cwf/mesh/preprocess.hpp"
@@ -37,11 +36,17 @@ using cwf::post::compute_derived_fields;
     mesh.group_lookup.emplace(1U, 0U);
 
     cwf::mesh::Element tet{};
-    tet.original_id = 0U;
+    tet.original_id    = 0U;
     tet.physical_group = 1U;
-    tet.geometry = cwf::mesh::ElementGeometry::Tetrahedron4;
-    tet.nodes = {0U, 1U, 2U, 3U, std::numeric_limits<std::uint32_t>::max(), std::numeric_limits<std::uint32_t>::max(),
-                 std::numeric_limits<std::uint32_t>::max(), std::numeric_limits<std::uint32_t>::max()};
+    tet.geometry       = cwf::mesh::ElementGeometry::Tetrahedron4;
+    tet.nodes          = {0U,
+                          1U,
+                          2U,
+                          3U,
+                          std::numeric_limits<std::uint32_t>::max(),
+                          std::numeric_limits<std::uint32_t>::max(),
+                          std::numeric_limits<std::uint32_t>::max(),
+                          std::numeric_limits<std::uint32_t>::max()};
     mesh.elements.push_back(tet);
     return mesh;
 }
@@ -52,26 +57,26 @@ using cwf::post::compute_derived_fields;
     cfg.mesh_path = std::filesystem::path{"synthetic.msh"};
 
     cwf::config::Material mat{};
-    mat.name = "steel";
+    mat.name           = "steel";
     mat.youngs_modulus = 30.0e9;
-    mat.poisson_ratio = 0.2;
-    mat.density = 2500.0;
+    mat.poisson_ratio  = 0.2;
+    mat.density        = 2500.0;
     cfg.materials.push_back(mat);
 
     cwf::config::Assignment assignment{};
-    assignment.group = "SOLID";
+    assignment.group    = "SOLID";
     assignment.material = "steel";
     cfg.assignments.push_back(assignment);
 
     cfg.damping = cwf::config::Damping{.xi = 0.02, .w1 = 5.0, .w2 = 50.0};
     cfg.time = cwf::config::TimeSettings{.initial_dt = 0.01, .adaptive = false, .min_dt = 0.0, .max_dt = 0.0};
-    cfg.solver = cwf::config::SolverSettings{.type = "pcg",
-                                             .preconditioner = "block_jacobi",
-                                             .runtime_tolerance = 1.0e-4,
-                                             .pause_tolerance = 1.0e-5,
-                                             .max_iterations = 64U};
+    cfg.solver    = cwf::config::SolverSettings{.type              = "pcg",
+                                                .preconditioner    = "block_jacobi",
+                                                .runtime_tolerance = 1.0e-4,
+                                                .pause_tolerance   = 1.0e-5,
+                                                .max_iterations    = 64U};
     cfg.precision = cwf::config::PrecisionSettings{.vector_precision = "fp32", .reduction_precision = "fp64"};
-    cfg.output = cwf::config::OutputSettings{.vtu_stride = 1U, .probes = {}};
+    cfg.output    = cwf::config::OutputSettings{.vtu_stride = 1U, .probes = {}};
     return cfg;
 }
 
@@ -90,7 +95,7 @@ using cwf::post::compute_derived_fields;
 TEST(DerivedFields, ComputesUniformXStrain)
 {
     auto mesh = make_single_tet_mesh();
-    auto cfg = make_basic_config();
+    auto cfg  = make_basic_config();
 
     const auto preprocess_result = cwf::mesh::pre::run(mesh, cfg);
     ASSERT_TRUE(preprocess_result.has_value());
@@ -105,7 +110,7 @@ TEST(DerivedFields, ComputesUniformXStrain)
     constexpr double kStrain = 0.01; // 1% stretch along X
     for (std::size_t node = 0; node < mesh.nodes.size(); ++node)
     {
-        const double x = mesh.nodes[node].position[0];
+        const double x                          = mesh.nodes[node].position[0];
         pack.buffers.nodes.displacement.x[node] = static_cast<float>(kStrain * x);
         pack.buffers.nodes.displacement.y[node] = 0.0F;
         pack.buffers.nodes.displacement.z[node] = 0.0F;
@@ -121,8 +126,9 @@ TEST(DerivedFields, ComputesUniformXStrain)
     EXPECT_NEAR(elem.strain[2], 0.0F, 1.0e-5F);
     EXPECT_NEAR(elem.strain[3], 0.0F, 1.0e-5F);
 
-    const double lambda = (cfg.materials[0].poisson_ratio * cfg.materials[0].youngs_modulus)
-                          / ((1.0 + cfg.materials[0].poisson_ratio) * (1.0 - 2.0 * cfg.materials[0].poisson_ratio));
+    const double lambda =
+        (cfg.materials[0].poisson_ratio * cfg.materials[0].youngs_modulus) /
+        ((1.0 + cfg.materials[0].poisson_ratio) * (1.0 - 2.0 * cfg.materials[0].poisson_ratio));
     const double mu = cfg.materials[0].youngs_modulus / (2.0 * (1.0 + cfg.materials[0].poisson_ratio));
     const double expected_sx = (lambda + 2.0 * mu) * kStrain;
     const double expected_sy = lambda * kStrain;

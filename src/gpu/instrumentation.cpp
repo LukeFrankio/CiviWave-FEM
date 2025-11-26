@@ -36,7 +36,6 @@
 #include <string_view>
 #include <utility>
 #include <vector>
-
 #include <vulkan/vulkan.h>
 #include <yaml-cpp/yaml.h>
 
@@ -76,7 +75,7 @@ namespace
  * @return tick difference accounting for wraparound
  */
 [[nodiscard]] constexpr auto safe_timestamp_diff(std::uint64_t start, std::uint64_t end,
-                                                  std::uint32_t valid_bits) noexcept -> std::uint64_t
+                                                 std::uint32_t valid_bits) noexcept -> std::uint64_t
 {
     // Handle the case where valid_bits >= 64 (no masking needed)
     if (valid_bits >= 64U)
@@ -85,9 +84,9 @@ namespace
     }
 
     // Create mask for valid bits
-    const std::uint64_t mask = (1ULL << valid_bits) - 1ULL;
+    const std::uint64_t mask         = (1ULL << valid_bits) - 1ULL;
     const std::uint64_t masked_start = start & mask;
-    const std::uint64_t masked_end = end & mask;
+    const std::uint64_t masked_end   = end & mask;
 
     // Handle wraparound: if end < start, the timer wrapped
     if (masked_end >= masked_start)
@@ -131,7 +130,7 @@ auto GpuTimestamps::create(const VulkanContext &context, std::size_t max_passes)
     }
 
     GpuTimestamps timestamps;
-    timestamps.device_ = context.device();
+    timestamps.device_     = context.device();
     timestamps.max_passes_ = max_passes;
     timestamps.pass_count_ = 0U;
     timestamps.pass_names_.reserve(max_passes);
@@ -140,7 +139,7 @@ auto GpuTimestamps::create(const VulkanContext &context, std::size_t max_passes)
     // Get timestamp properties from the device
     VkPhysicalDeviceProperties props{};
     vkGetPhysicalDeviceProperties(context.device_summary().physical_device, &props);
-    timestamps.timestamp_period_ns_ = props.limits.timestampPeriod;
+    timestamps.timestamp_period_ns_  = props.limits.timestampPeriod;
     timestamps.timestamp_valid_bits_ = context.queue_info().timestamp_bits;
 
     if (timestamps.timestamp_valid_bits_ == 0U)
@@ -151,38 +150,34 @@ auto GpuTimestamps::create(const VulkanContext &context, std::size_t max_passes)
 
     // Create query pool with 2 slots per pass (start + end)
     VkQueryPoolCreateInfo pool_info{};
-    pool_info.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
-    pool_info.queryType = VK_QUERY_TYPE_TIMESTAMP;
+    pool_info.sType      = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+    pool_info.queryType  = VK_QUERY_TYPE_TIMESTAMP;
     pool_info.queryCount = static_cast<std::uint32_t>(max_passes * 2U);
 
     const VkResult result = vkCreateQueryPool(context.device(), &pool_info, nullptr, &timestamps.query_pool_);
     if (result != VK_SUCCESS)
     {
-        return std::unexpected(make_error("vkCreateQueryPool failed",
-                                          {"GpuTimestamps::create"}, result));
+        return std::unexpected(make_error("vkCreateQueryPool failed", {"GpuTimestamps::create"}, result));
     }
 
     // Name the query pool for RGP/debug tools
     context.set_object_name(reinterpret_cast<std::uint64_t>(timestamps.query_pool_),
                             VK_OBJECT_TYPE_QUERY_POOL, "cwf_instrumentation_timestamps");
 
-    std::println("[cwf::instrumentation] GpuTimestamps created: max_passes={}, period_ns={:.2f}, valid_bits={}",
-                 max_passes, timestamps.timestamp_period_ns_, timestamps.timestamp_valid_bits_);
+    std::println(
+        "[cwf::instrumentation] GpuTimestamps created: max_passes={}, period_ns={:.2f}, valid_bits={}",
+        max_passes, timestamps.timestamp_period_ns_, timestamps.timestamp_valid_bits_);
 
     return timestamps;
 }
 
 GpuTimestamps::GpuTimestamps(GpuTimestamps &&other) noexcept
-    : device_{other.device_},
-      query_pool_{other.query_pool_},
-      max_passes_{other.max_passes_},
-      pass_count_{other.pass_count_},
-      timestamp_period_ns_{other.timestamp_period_ns_},
-      timestamp_valid_bits_{other.timestamp_valid_bits_},
-      pass_names_{std::move(other.pass_names_)},
+    : device_{other.device_}, query_pool_{other.query_pool_}, max_passes_{other.max_passes_},
+      pass_count_{other.pass_count_}, timestamp_period_ns_{other.timestamp_period_ns_},
+      timestamp_valid_bits_{other.timestamp_valid_bits_}, pass_names_{std::move(other.pass_names_)},
       raw_timestamps_{std::move(other.raw_timestamps_)}
 {
-    other.device_ = VK_NULL_HANDLE;
+    other.device_     = VK_NULL_HANDLE;
     other.query_pool_ = VK_NULL_HANDLE;
     other.max_passes_ = 0U;
     other.pass_count_ = 0U;
@@ -193,16 +188,16 @@ auto GpuTimestamps::operator=(GpuTimestamps &&other) noexcept -> GpuTimestamps &
     if (this != &other)
     {
         destroy();
-        device_ = other.device_;
-        query_pool_ = other.query_pool_;
-        max_passes_ = other.max_passes_;
-        pass_count_ = other.pass_count_;
-        timestamp_period_ns_ = other.timestamp_period_ns_;
+        device_               = other.device_;
+        query_pool_           = other.query_pool_;
+        max_passes_           = other.max_passes_;
+        pass_count_           = other.pass_count_;
+        timestamp_period_ns_  = other.timestamp_period_ns_;
         timestamp_valid_bits_ = other.timestamp_valid_bits_;
-        pass_names_ = std::move(other.pass_names_);
-        raw_timestamps_ = std::move(other.raw_timestamps_);
+        pass_names_           = std::move(other.pass_names_);
+        raw_timestamps_       = std::move(other.raw_timestamps_);
 
-        other.device_ = VK_NULL_HANDLE;
+        other.device_     = VK_NULL_HANDLE;
         other.query_pool_ = VK_NULL_HANDLE;
         other.max_passes_ = 0U;
         other.pass_count_ = 0U;
@@ -248,8 +243,8 @@ auto GpuTimestamps::mark_start(VkCommandBuffer cmd, std::string_view name, VkPip
         return std::nullopt;
     }
 
-    const std::size_t pass_index = pass_count_;
-    const auto query_index = static_cast<std::uint32_t>(pass_index * 2U); // start query
+    const std::size_t pass_index  = pass_count_;
+    const auto        query_index = static_cast<std::uint32_t>(pass_index * 2U); // start query
 
     pass_names_.emplace_back(name);
     ++pass_count_;
@@ -267,8 +262,8 @@ void GpuTimestamps::mark_end(VkCommandBuffer cmd, VkPipelineStageFlags2 stage)
         return;
     }
 
-    const std::size_t pass_index = pass_count_ - 1U;
-    const auto query_index = static_cast<std::uint32_t>(pass_index * 2U + 1U); // end query
+    const std::size_t pass_index  = pass_count_ - 1U;
+    const auto        query_index = static_cast<std::uint32_t>(pass_index * 2U + 1U); // end query
 
     vkCmdWriteTimestamp2(cmd, stage, query_pool_, query_index);
 }
@@ -286,19 +281,18 @@ auto GpuTimestamps::resolve() -> std::expected<std::vector<PassTiming>, Instrume
     }
 
     // Fetch all recorded timestamps
-    const auto query_count = static_cast<std::uint32_t>(pass_count_ * 2U);
-    const VkDeviceSize stride = sizeof(std::uint64_t);
-    const VkDeviceSize data_size = static_cast<VkDeviceSize>(query_count) * stride;
+    const auto         query_count = static_cast<std::uint32_t>(pass_count_ * 2U);
+    const VkDeviceSize stride      = sizeof(std::uint64_t);
+    const VkDeviceSize data_size   = static_cast<VkDeviceSize>(query_count) * stride;
 
-    const VkResult result = vkGetQueryPoolResults(
-        device_, query_pool_, 0U, query_count,
-        static_cast<size_t>(data_size), raw_timestamps_.data(), stride,
-        VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+    const VkResult result = vkGetQueryPoolResults(device_, query_pool_, 0U, query_count,
+                                                  static_cast<size_t>(data_size), raw_timestamps_.data(),
+                                                  stride, VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
 
     if (result != VK_SUCCESS && result != VK_NOT_READY)
     {
-        return std::unexpected(make_error("vkGetQueryPoolResults failed",
-                                          {"GpuTimestamps::resolve"}, result));
+        return std::unexpected(
+            make_error("vkGetQueryPoolResults failed", {"GpuTimestamps::resolve"}, result));
     }
 
     // Convert to PassTiming structs
@@ -307,16 +301,16 @@ auto GpuTimestamps::resolve() -> std::expected<std::vector<PassTiming>, Instrume
 
     for (std::size_t i = 0U; i < pass_count_; ++i)
     {
-        const std::uint64_t start_tick = raw_timestamps_[i * 2U];
-        const std::uint64_t end_tick = raw_timestamps_[i * 2U + 1U];
-        const std::uint64_t diff = safe_timestamp_diff(start_tick, end_tick, timestamp_valid_bits_);
-        const double duration_ms = ticks_to_ms(diff, timestamp_period_ns_);
+        const std::uint64_t start_tick  = raw_timestamps_[i * 2U];
+        const std::uint64_t end_tick    = raw_timestamps_[i * 2U + 1U];
+        const std::uint64_t diff        = safe_timestamp_diff(start_tick, end_tick, timestamp_valid_bits_);
+        const double        duration_ms = ticks_to_ms(diff, timestamp_period_ns_);
 
         timings.push_back(PassTiming{
-            .name = pass_names_[i],
+            .name        = pass_names_[i],
             .duration_ms = duration_ms,
-            .start_tick = start_tick,
-            .end_tick = end_tick,
+            .start_tick  = start_tick,
+            .end_tick    = end_tick,
         });
     }
 
@@ -330,22 +324,22 @@ auto GpuTimestamps::resolve() -> std::expected<std::vector<PassTiming>, Instrume
 auto FrameLogger::create(const InstrumentationConfig &config) -> FrameLogger
 {
     FrameLogger logger;
-    logger.config_ = config;
+    logger.config_  = config;
     logger.enabled_ = config.enable_yaml_logging;
     return logger;
 }
 
-void FrameLogger::begin_frame(std::uint64_t frame_index, double simulation_time,
-                              double time_step, double tolerance, bool paused)
+void FrameLogger::begin_frame(std::uint64_t frame_index, double simulation_time, double time_step,
+                              double tolerance, bool paused)
 {
     frame_start_ = std::chrono::steady_clock::now();
 
-    current_ = FrameLog{};
-    current_.frame_index = frame_index;
+    current_                   = FrameLog{};
+    current_.frame_index       = frame_index;
     current_.simulation_time_s = simulation_time;
-    current_.time_step_s = time_step;
-    current_.solver_tolerance = tolerance;
-    current_.paused_mode = paused;
+    current_.time_step_s       = time_step;
+    current_.solver_tolerance  = tolerance;
+    current_.paused_mode       = paused;
     current_.pass_timings.clear();
 }
 
@@ -361,16 +355,16 @@ void FrameLogger::record_passes(std::span<const PassTiming> timings)
 
 void FrameLogger::record_pcg(const pcg::PcgTelemetry &telemetry)
 {
-    current_.pcg_iterations = telemetry.iterations;
+    current_.pcg_iterations    = telemetry.iterations;
     current_.pcg_residual_norm = telemetry.residual_norm;
-    current_.pcg_rhs_norm = telemetry.rhs_norm;
-    current_.pcg_converged = telemetry.converged;
+    current_.pcg_rhs_norm      = telemetry.rhs_norm;
+    current_.pcg_converged     = telemetry.converged;
 }
 
 void FrameLogger::record_adaptive(bool increased, bool decreased, bool clamped_min, bool clamped_max)
 {
-    current_.dt_increased = increased;
-    current_.dt_decreased = decreased;
+    current_.dt_increased   = increased;
+    current_.dt_decreased   = decreased;
     current_.dt_clamped_min = clamped_min;
     current_.dt_clamped_max = clamped_max;
 }
@@ -378,8 +372,8 @@ void FrameLogger::record_adaptive(bool increased, bool decreased, bool clamped_m
 auto FrameLogger::end_frame() -> FrameLog
 {
     // Compute wall clock time
-    const auto frame_end = std::chrono::steady_clock::now();
-    const auto elapsed = std::chrono::duration<double, std::milli>(frame_end - frame_start_);
+    const auto frame_end   = std::chrono::steady_clock::now();
+    const auto elapsed     = std::chrono::duration<double, std::milli>(frame_end - frame_start_);
     current_.wall_clock_ms = elapsed.count();
 
     // Write YAML log if enabled and stride is met
@@ -412,7 +406,7 @@ void FrameLogger::write_yaml() const
 
     // Build filename
     const std::string filename = std::format("{}{:06d}.yaml", config_.log_prefix, current_.frame_index);
-    const auto path = config_.log_directory / filename;
+    const auto        path     = config_.log_directory / filename;
 
     auto result = write_frame_log(current_, path);
     if (!result)
@@ -543,8 +537,8 @@ auto write_frame_log(const FrameLog &log, const std::filesystem::path &path)
     std::ofstream file{path, std::ios::out | std::ios::trunc};
     if (!file)
     {
-        return std::unexpected(make_error("failed to open file for writing",
-                                          {path.string()}, VK_ERROR_UNKNOWN));
+        return std::unexpected(
+            make_error("failed to open file for writing", {path.string()}, VK_ERROR_UNKNOWN));
     }
 
     file << frame_log_to_yaml(log);
@@ -552,8 +546,7 @@ auto write_frame_log(const FrameLog &log, const std::filesystem::path &path)
 
     if (file.fail())
     {
-        return std::unexpected(make_error("failed to write frame log",
-                                          {path.string()}, VK_ERROR_UNKNOWN));
+        return std::unexpected(make_error("failed to write frame log", {path.string()}, VK_ERROR_UNKNOWN));
     }
 
     return {};

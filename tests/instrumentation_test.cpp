@@ -18,16 +18,14 @@
  * @note documented with Doxygen 1.15 beta because testing is praxis ✨
  */
 
-#include <gtest/gtest.h>
-
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <gtest/gtest.h>
 #include <sstream>
 #include <string>
 #include <vector>
-
 #include <yaml-cpp/yaml.h>
 
 #include "cwf/gpu/instrumentation.hpp"
@@ -42,7 +40,7 @@ namespace
  */
 class InstrumentationTest : public ::testing::Test
 {
-protected:
+  protected:
     void SetUp() override
     {
         // Clean up any leftover test files
@@ -67,12 +65,12 @@ protected:
 TEST_F(InstrumentationTest, FrameLogToYaml_EmptyLog_ValidYaml)
 {
     FrameLog log{};
-    log.frame_index = 0U;
+    log.frame_index       = 0U;
     log.simulation_time_s = 0.0;
-    log.time_step_s = 0.01;
-    log.solver_tolerance = 1.0e-4;
-    log.paused_mode = false;
-    log.wall_clock_ms = 16.7;
+    log.time_step_s       = 0.01;
+    log.solver_tolerance  = 1.0e-4;
+    log.paused_mode       = false;
+    log.wall_clock_ms     = 16.7;
 
     const std::string yaml = frame_log_to_yaml(log);
 
@@ -88,12 +86,12 @@ TEST_F(InstrumentationTest, FrameLogToYaml_EmptyLog_ValidYaml)
 TEST_F(InstrumentationTest, FrameLogToYaml_WithPassTimings_ContainsTimingsMap)
 {
     FrameLog log{};
-    log.frame_index = 42U;
+    log.frame_index       = 42U;
     log.simulation_time_s = 0.42;
-    log.time_step_s = 0.01;
-    log.solver_tolerance = 2.0e-4;
-    log.paused_mode = false;
-    log.wall_clock_ms = 33.3;
+    log.time_step_s       = 0.01;
+    log.solver_tolerance  = 2.0e-4;
+    log.paused_mode       = false;
+    log.wall_clock_ms     = 33.3;
 
     log.pass_timings = {
         PassTiming{.name = "predictor", .duration_ms = 1.5, .start_tick = 0U, .end_tick = 1000U},
@@ -102,7 +100,7 @@ TEST_F(InstrumentationTest, FrameLogToYaml_WithPassTimings_ContainsTimingsMap)
     };
 
     const std::string yaml = frame_log_to_yaml(log);
-    YAML::Node node = YAML::Load(yaml);
+    YAML::Node        node = YAML::Load(yaml);
 
     ASSERT_TRUE(node["timings"].IsDefined());
     ASSERT_TRUE(node["timings"].IsMap());
@@ -114,20 +112,20 @@ TEST_F(InstrumentationTest, FrameLogToYaml_WithPassTimings_ContainsTimingsMap)
 TEST_F(InstrumentationTest, FrameLogToYaml_WithPcgTelemetry_ContainsPcgSection)
 {
     FrameLog log{};
-    log.frame_index = 100U;
+    log.frame_index       = 100U;
     log.simulation_time_s = 1.0;
-    log.time_step_s = 0.01;
-    log.solver_tolerance = 3.0e-4;
-    log.paused_mode = true;
-    log.wall_clock_ms = 50.0;
+    log.time_step_s       = 0.01;
+    log.solver_tolerance  = 3.0e-4;
+    log.paused_mode       = true;
+    log.wall_clock_ms     = 50.0;
 
-    log.pcg_iterations = 45U;
+    log.pcg_iterations    = 45U;
     log.pcg_residual_norm = 2.5e-5;
-    log.pcg_rhs_norm = 1.0e3;
-    log.pcg_converged = true;
+    log.pcg_rhs_norm      = 1.0e3;
+    log.pcg_converged     = true;
 
     const std::string yaml = frame_log_to_yaml(log);
-    YAML::Node node = YAML::Load(yaml);
+    YAML::Node        node = YAML::Load(yaml);
 
     ASSERT_TRUE(node["pcg"].IsDefined());
     ASSERT_TRUE(node["pcg"].IsMap());
@@ -139,20 +137,20 @@ TEST_F(InstrumentationTest, FrameLogToYaml_WithPcgTelemetry_ContainsPcgSection)
 TEST_F(InstrumentationTest, FrameLogToYaml_WithAdaptiveFlags_ContainsAdaptiveSection)
 {
     FrameLog log{};
-    log.frame_index = 200U;
+    log.frame_index       = 200U;
     log.simulation_time_s = 2.0;
-    log.time_step_s = 0.02;
-    log.solver_tolerance = 2.0e-4;
-    log.paused_mode = false;
-    log.wall_clock_ms = 40.0;
+    log.time_step_s       = 0.02;
+    log.solver_tolerance  = 2.0e-4;
+    log.paused_mode       = false;
+    log.wall_clock_ms     = 40.0;
 
-    log.dt_increased = true;
-    log.dt_decreased = false;
+    log.dt_increased   = true;
+    log.dt_decreased   = false;
     log.dt_clamped_min = false;
     log.dt_clamped_max = false;
 
     const std::string yaml = frame_log_to_yaml(log);
-    YAML::Node node = YAML::Load(yaml);
+    YAML::Node        node = YAML::Load(yaml);
 
     ASSERT_TRUE(node["adaptive"].IsDefined());
     EXPECT_TRUE(node["adaptive"]["dt_increased"].as<bool>());
@@ -168,20 +166,20 @@ TEST_F(InstrumentationTest, FrameLogToYaml_WithAdaptiveFlags_ContainsAdaptiveSec
 TEST_F(InstrumentationTest, WriteFrameLog_ValidPath_CreatesFile)
 {
     FrameLog log{};
-    log.frame_index = 123U;
+    log.frame_index       = 123U;
     log.simulation_time_s = 1.23;
-    log.time_step_s = 0.01;
-    log.solver_tolerance = 1.0e-4;
-    log.wall_clock_ms = 16.0;
+    log.time_step_s       = 0.01;
+    log.solver_tolerance  = 1.0e-4;
+    log.wall_clock_ms     = 16.0;
 
-    const auto path = test_output_dir_ / "test_frame.yaml";
-    auto result = write_frame_log(log, path);
+    const auto path   = test_output_dir_ / "test_frame.yaml";
+    auto       result = write_frame_log(log, path);
 
     ASSERT_TRUE(result.has_value()) << "write_frame_log failed: " << result.error().message;
     EXPECT_TRUE(std::filesystem::exists(path));
 
     // Verify file contents are valid YAML
-    std::ifstream file{path};
+    std::ifstream     file{path};
     std::stringstream buffer;
     buffer << file.rdbuf();
 
@@ -197,7 +195,7 @@ TEST_F(InstrumentationTest, WriteFrameLog_InvalidPath_ReturnsError)
 
     // Use a path that cannot be created (invalid characters or restricted)
     const std::filesystem::path invalid_path = "/nonexistent/deeply/nested/invalid/path/frame.yaml";
-    auto result = write_frame_log(log, invalid_path);
+    auto                        result       = write_frame_log(log, invalid_path);
 
     // Should return error for invalid path
     EXPECT_FALSE(result.has_value());
@@ -221,7 +219,7 @@ TEST_F(InstrumentationTest, FrameLogger_BeginEndFrame_RecordsWallClock)
     {
         dummy += i;
     }
-    (void)dummy;
+    (void) dummy;
 
     auto log = logger.end_frame();
 
@@ -258,10 +256,10 @@ TEST_F(InstrumentationTest, FrameLogger_RecordPcg_StoresTelemetry)
     logger.begin_frame(20U, 0.2, 0.01, 2.0e-4, true);
 
     pcg::PcgTelemetry pcg_telemetry{};
-    pcg_telemetry.iterations = 50U;
+    pcg_telemetry.iterations    = 50U;
     pcg_telemetry.residual_norm = 1.5e-5;
-    pcg_telemetry.rhs_norm = 500.0;
-    pcg_telemetry.converged = true;
+    pcg_telemetry.rhs_norm      = 500.0;
+    pcg_telemetry.converged     = true;
 
     logger.record_pcg(pcg_telemetry);
 
@@ -295,9 +293,9 @@ TEST_F(InstrumentationTest, FrameLogger_WithYamlOutput_WritesFile)
 {
     InstrumentationConfig config{};
     config.enable_yaml_logging = true;
-    config.log_directory = test_output_dir_;
-    config.log_prefix = "test_";
-    config.log_stride = 1U;
+    config.log_directory       = test_output_dir_;
+    config.log_prefix          = "test_";
+    config.log_stride          = 1U;
 
     auto logger = FrameLogger::create(config);
     logger.begin_frame(0U, 0.0, 0.01, 1.0e-4, false);
@@ -313,9 +311,9 @@ TEST_F(InstrumentationTest, FrameLogger_LogStride_SkipsFrames)
 {
     InstrumentationConfig config{};
     config.enable_yaml_logging = true;
-    config.log_directory = test_output_dir_;
-    config.log_prefix = "stride_";
-    config.log_stride = 5U; // Only log every 5th frame
+    config.log_directory       = test_output_dir_;
+    config.log_prefix          = "stride_";
+    config.log_stride          = 5U; // Only log every 5th frame
 
     auto logger = FrameLogger::create(config);
 
@@ -352,10 +350,10 @@ TEST_F(InstrumentationTest, PassTiming_DefaultConstruction_ZeroValues)
 TEST_F(InstrumentationTest, PassTiming_DesignatedInit_SetsAllFields)
 {
     PassTiming timing{
-        .name = "test_pass",
+        .name        = "test_pass",
         .duration_ms = 42.5,
-        .start_tick = 1000U,
-        .end_tick = 2000U,
+        .start_tick  = 1000U,
+        .end_tick    = 2000U,
     };
 
     EXPECT_EQ(timing.name, "test_pass");

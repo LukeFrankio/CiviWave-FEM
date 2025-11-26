@@ -49,7 +49,7 @@ auto make_coefficients(double dt, double beta, double gamma) -> Coefficients
 auto predict_state(const Coefficients &coeffs, const State &previous) -> PredictedState
 {
     const std::size_t n = previous.displacement.size();
-    PredictedState     predicted{};
+    PredictedState    predicted{};
     predicted.displacement.resize(n);
     predicted.velocity.resize(n);
 
@@ -60,9 +60,9 @@ auto predict_state(const Coefficients &coeffs, const State &previous) -> Predict
 
     for (std::size_t i = 0; i < n; ++i)
     {
-        const double u = previous.displacement[i];
-        const double v = previous.velocity[i];
-        const double a = previous.acceleration[i];
+        const double u            = previous.displacement[i];
+        const double v            = previous.velocity[i];
+        const double a            = previous.acceleration[i];
         predicted.displacement[i] = u + dt * v + dt_sq * disp_factor * a;
         predicted.velocity[i]     = v + dt * vel_factor * a;
     }
@@ -73,9 +73,9 @@ auto predict_state(const Coefficients &coeffs, const State &previous) -> Predict
 auto compute_update_scalars(const Coefficients &coeffs) -> UpdateScalars
 {
     UpdateScalars scalars{};
-    const double dt = coeffs.dt;
-    const double beta_dt = coeffs.beta * dt;
-    scalars.inv_beta_dt2 = 1.0 / (coeffs.beta * dt * dt);
+    const double  dt           = coeffs.dt;
+    const double  beta_dt      = coeffs.beta * dt;
+    scalars.inv_beta_dt2       = 1.0 / (coeffs.beta * dt * dt);
     scalars.gamma_over_beta_dt = coeffs.gamma / beta_dt;
     return scalars;
 }

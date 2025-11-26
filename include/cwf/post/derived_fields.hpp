@@ -37,8 +37,8 @@ namespace cwf::post
  */
 struct ElementField
 {
-    std::array<float, 6> strain{}; ///< εxx, εyy, εzz, γxy, γyz, γxz (engineering shear)
-    std::array<float, 6> stress{}; ///< σxx, σyy, σzz, τxy, τyz, τxz in Pascals
+    std::array<float, 6> strain{};        ///< εxx, εyy, εzz, γxy, γyz, γxz (engineering shear)
+    std::array<float, 6> stress{};        ///< σxx, σyy, σzz, τxy, τyz, τxz in Pascals
     float                von_mises{0.0F}; ///< scalar invariant for quick visuals (Pa)
 };
 
@@ -50,8 +50,8 @@ struct ElementField
  */
 struct NodeField
 {
-    std::array<float, 6> strain{}; ///< averaged ε tensor per node
-    std::array<float, 6> stress{}; ///< averaged σ tensor per node
+    std::array<float, 6> strain{};        ///< averaged ε tensor per node
+    std::array<float, 6> stress{};        ///< averaged σ tensor per node
     float                von_mises{0.0F}; ///< derived from averaged stress tensor (Pa)
 };
 
@@ -95,7 +95,7 @@ struct DerivedFieldSet
  * // derived.elements[i].stress[0] now holds σxx for element i uwu
  * @endcode
  */
-[[nodiscard]] auto compute_derived_fields(const mesh::pack::PackingResult &packing,
+[[nodiscard]] auto compute_derived_fields(const mesh::pack::PackingResult                       &packing,
                                           std::span<const physics::materials::ElasticProperties> materials)
     -> DerivedFieldSet;
 

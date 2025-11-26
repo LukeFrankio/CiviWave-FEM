@@ -24,13 +24,13 @@ namespace cwf::post
 namespace
 {
 
-constexpr std::size_t kMaxLocalNodes = 8U;
-constexpr std::uint32_t kInvalidIndex = std::numeric_limits<std::uint32_t>::max();
+constexpr std::size_t   kMaxLocalNodes = 8U;
+constexpr std::uint32_t kInvalidIndex  = std::numeric_limits<std::uint32_t>::max();
 
 [[nodiscard]] inline auto node_count_for_element(const std::vector<std::uint32_t> &connectivity,
                                                  std::size_t element_index) noexcept -> std::size_t
 {
-    const auto base = element_index * kMaxLocalNodes;
+    const auto  base  = element_index * kMaxLocalNodes;
     std::size_t count = 0U;
     for (; count < kMaxLocalNodes; ++count)
     {
@@ -45,14 +45,15 @@ constexpr std::uint32_t kInvalidIndex = std::numeric_limits<std::uint32_t>::max(
 [[nodiscard]] inline auto fetch_displacement(const mesh::pack::Float3SoA &soa, std::size_t node) noexcept
     -> std::array<double, 3>
 {
-    return {static_cast<double>(soa.x[node]), static_cast<double>(soa.y[node]), static_cast<double>(soa.z[node])};
+    return {static_cast<double>(soa.x[node]), static_cast<double>(soa.y[node]),
+            static_cast<double>(soa.z[node])};
 }
 
 [[nodiscard]] inline auto compute_von_mises(const std::array<double, 6> &stress) noexcept -> double
 {
-    const double sx = stress[0];
-    const double sy = stress[1];
-    const double sz = stress[2];
+    const double sx  = stress[0];
+    const double sy  = stress[1];
+    const double sz  = stress[2];
     const double txy = stress[3];
     const double tyz = stress[4];
     const double txz = stress[5];
@@ -61,8 +62,8 @@ constexpr std::uint32_t kInvalidIndex = std::numeric_limits<std::uint32_t>::max(
     const double diff_yz = sy - sz;
     const double diff_zx = sz - sx;
 
-    const double energy = 0.5 * (diff_xy * diff_xy + diff_yz * diff_yz + diff_zx * diff_zx)
-                          + 3.0 * (txy * txy + tyz * tyz + txz * txz);
+    const double energy = 0.5 * (diff_xy * diff_xy + diff_yz * diff_yz + diff_zx * diff_zx) +
+                          3.0 * (txy * txy + tyz * tyz + txz * txz);
     return std::sqrt(std::max(energy, 0.0));
 }
 
@@ -84,11 +85,8 @@ constexpr std::uint32_t kInvalidIndex = std::numeric_limits<std::uint32_t>::max(
 
 inline void accumulate_node(std::vector<std::array<double, 6>> &strain_accum,
                             std::vector<std::array<double, 6>> &stress_accum,
-                            std::vector<double> &volume_accum,
-                            std::uint32_t node,
-                            double volume,
-                            const std::array<double, 6> &strain,
-                            const std::array<double, 6> &stress)
+                            std::vector<double> &volume_accum, std::uint32_t node, double volume,
+                            const std::array<double, 6> &strain, const std::array<double, 6> &stress)
 {
     volume_accum[node] += volume;
     for (std::size_t c = 0; c < 6U; ++c)
@@ -98,8 +96,7 @@ inline void accumulate_node(std::vector<std::array<double, 6>> &strain_accum,
     }
 }
 
-inline void store_element(ElementField &field,
-                          const std::array<double, 6> &strain,
+inline void store_element(ElementField &field, const std::array<double, 6> &strain,
                           const std::array<double, 6> &stress)
 {
     for (std::size_t c = 0; c < 6U; ++c)
@@ -110,10 +107,8 @@ inline void store_element(ElementField &field,
     field.von_mises = static_cast<float>(compute_von_mises(stress));
 }
 
-inline void finalize_node(NodeField &field,
-                          const std::array<double, 6> &strain,
-                          const std::array<double, 6> &stress,
-                          double weight)
+inline void finalize_node(NodeField &field, const std::array<double, 6> &strain,
+                          const std::array<double, 6> &stress, double weight)
 {
     if (weight <= 0.0)
     {
@@ -121,14 +116,14 @@ inline void finalize_node(NodeField &field,
         return;
     }
 
-    const double inv = 1.0 / weight;
+    const double          inv = 1.0 / weight;
     std::array<double, 6> averaged_stress{};
     for (std::size_t c = 0; c < 6U; ++c)
     {
-        const double s = strain[c] * inv;
-        const double t = stress[c] * inv;
-        field.strain[c] = static_cast<float>(s);
-        field.stress[c] = static_cast<float>(t);
+        const double s     = strain[c] * inv;
+        const double t     = stress[c] * inv;
+        field.strain[c]    = static_cast<float>(s);
+        field.stress[c]    = static_cast<float>(t);
         averaged_stress[c] = t;
     }
     field.von_mises = static_cast<float>(compute_von_mises(averaged_stress));
@@ -136,12 +131,13 @@ inline void finalize_node(NodeField &field,
 
 } // namespace
 
-auto compute_derived_fields(const mesh::pack::PackingResult &packing,
-                            std::span<const physics::materials::ElasticProperties> materials) -> DerivedFieldSet
+auto compute_derived_fields(const mesh::pack::PackingResult                       &packing,
+                            std::span<const physics::materials::ElasticProperties> materials)
+    -> DerivedFieldSet
 {
-    const auto &buffers = packing.buffers;
+    const auto &buffers       = packing.buffers;
     const auto  element_count = packing.metadata.element_count;
-    const auto  node_count = packing.metadata.node_count;
+    const auto  node_count    = packing.metadata.node_count;
 
     DerivedFieldSet fields{};
     fields.elements.resize(element_count);
@@ -164,8 +160,8 @@ auto compute_derived_fields(const mesh::pack::PackingResult &packing,
         const auto &material = materials[mat_index];
 
         std::array<double, 6> strain{};
-        const auto gradient_base = elem * kMaxLocalNodes * 3U;
-        const auto conn_base = elem * kMaxLocalNodes;
+        const auto            gradient_base = elem * kMaxLocalNodes * 3U;
+        const auto            conn_base     = elem * kMaxLocalNodes;
         for (std::size_t local = 0; local < local_count; ++local)
         {
             const auto node_index = buffers.elements.connectivity[conn_base + local];
@@ -174,10 +170,13 @@ auto compute_derived_fields(const mesh::pack::PackingResult &packing,
                 continue;
             }
 
-            const auto displacement = fetch_displacement(buffers.nodes.displacement, node_index);
-            const double grad_x = static_cast<double>(buffers.elements.gradients[gradient_base + local * 3U + 0U]);
-            const double grad_y = static_cast<double>(buffers.elements.gradients[gradient_base + local * 3U + 1U]);
-            const double grad_z = static_cast<double>(buffers.elements.gradients[gradient_base + local * 3U + 2U]);
+            const auto   displacement = fetch_displacement(buffers.nodes.displacement, node_index);
+            const double grad_x =
+                static_cast<double>(buffers.elements.gradients[gradient_base + local * 3U + 0U]);
+            const double grad_y =
+                static_cast<double>(buffers.elements.gradients[gradient_base + local * 3U + 1U]);
+            const double grad_z =
+                static_cast<double>(buffers.elements.gradients[gradient_base + local * 3U + 2U]);
 
             strain[0] += grad_x * displacement[0];
             strain[1] += grad_y * displacement[1];

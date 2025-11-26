@@ -34,17 +34,16 @@ namespace
     const auto mask = alignment - 1U;
     return (value + mask) & ~mask;
 }
-}
+} // namespace
 
 [[nodiscard]] auto plan_shards(const std::vector<BufferSpecification> &specs,
-                               const std::size_t                       max_buffer_bytes,
-                               const std::size_t                       alignment)
+                               const std::size_t max_buffer_bytes, const std::size_t alignment)
     -> std::expected<ShardedLayout, ShardError>
 {
     if ((alignment == 0U) || !std::has_single_bit(alignment))
     {
         return std::unexpected(ShardError{"alignment must be a non-zero power of two",
-                           {"alignment=" + std::to_string(alignment)}});
+                                          {"alignment=" + std::to_string(alignment)}});
     }
 
     if (max_buffer_bytes == 0U)
@@ -59,9 +58,9 @@ namespace
 
     ShardedLayout layout{};
     layout.max_buffer_bytes = max_buffer_bytes;
-    layout.alignment = alignment;
+    layout.alignment        = alignment;
 
-    std::size_t current_buffer_size = 0U;
+    std::size_t   current_buffer_size  = 0U;
     std::uint32_t current_buffer_index = 0U;
 
     layout.device_buffer_sizes.push_back(0U);
@@ -70,20 +69,19 @@ namespace
     {
         if (spec.size_bytes == 0U)
         {
-            return std::unexpected(ShardError{"buffer has zero size",
-                                               {"name=" + spec.name}});
+            return std::unexpected(ShardError{"buffer has zero size", {"name=" + spec.name}});
         }
 
         if ((spec.alignment == 0U) || !std::has_single_bit(spec.alignment))
         {
-            return std::unexpected(ShardError{"buffer alignment must be power of two",
-                                               {"name=" + spec.name,
-                                                "alignment=" + std::to_string(spec.alignment)}});
+            return std::unexpected(
+                ShardError{"buffer alignment must be power of two",
+                           {"name=" + spec.name, "alignment=" + std::to_string(spec.alignment)}});
         }
 
         const auto effective_alignment = std::max(alignment, spec.alignment);
 
-        std::size_t remaining = spec.size_bytes;
+        std::size_t remaining      = spec.size_bytes;
         std::size_t logical_offset = 0U;
 
         while (remaining > 0U)

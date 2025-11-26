@@ -28,20 +28,19 @@ struct ProbeError
  */
 class ProbeLogger
 {
-public:
+  public:
     ProbeLogger(std::filesystem::path path, std::vector<std::uint32_t> probes);
 
-    [[nodiscard]] auto log_frame(double simulation_time,
-                                 std::uint32_t frame_index,
-                                 const mesh::pack::PackingResult &packing,
-                                 const DerivedFieldSet &derived) -> std::expected<void, ProbeError>;
+    [[nodiscard]] auto log_frame(double simulation_time, std::uint32_t frame_index,
+                                 const mesh::pack::PackingResult &packing, const DerivedFieldSet &derived)
+        -> std::expected<void, ProbeError>;
 
-private:
+  private:
     [[nodiscard]] auto write_header() -> std::expected<void, ProbeError>;
 
-    std::filesystem::path path_{};
+    std::filesystem::path      path_{};
     std::vector<std::uint32_t> probes_{};
-    bool header_written_{false};
+    bool                       header_written_{false};
 };
 
 } // namespace cwf::post
