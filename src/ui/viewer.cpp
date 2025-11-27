@@ -48,6 +48,7 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+#include <cstdlib>
 
 #include "cwf/gpu/device_buffers.hpp"
 #include "cwf/gpu/newmark_stepper.hpp"
@@ -219,6 +220,56 @@ struct MeshBuffers
     return viewer;
 }
 
+/**
+ * @brief Attempts to resolve a usable shader directory path by checking the configured compile-time
+ * value and several common runtime locations.
+ *
+ * Search order:
+ * 1) env var CWF_SHADER_DIR (if set)
+ * 2) the configured path (CWF_SHADER_BUILD_DIR macro)
+ * 3) current working directory /shaders
+ * 4) parent working directory /shaders (up to two levels up)
+ *
+ * Returns an empty optional if no existing directory is found.
+ */
+[[nodiscard]] auto resolve_shader_directory(const std::filesystem::path &configured) noexcept
+    -> std::optional<std::filesystem::path>
+{
+    // 1) environment override
+    if (const char *env_val = std::getenv("CWF_SHADER_DIR"); env_val != nullptr)
+    {
+        std::filesystem::path env_path{env_val};
+        if (std::filesystem::is_directory(env_path))
+        {
+            return env_path;
+        }
+    }
+
+    // 2) configured compile-time path
+    if (!configured.empty() && std::filesystem::is_directory(configured))
+    {
+        return configured;
+    }
+
+    // 3) try CWD and some common relatives
+    const std::filesystem::path cwd = std::filesystem::current_path();
+    const std::vector<std::filesystem::path> candidates = {
+        cwd / "shaders",
+        cwd.parent_path() / "shaders",
+        cwd.parent_path().parent_path() / "shaders",
+    };
+    for (const auto &p : candidates)
+    {
+        if (!p.empty() && std::filesystem::is_directory(p))
+        {
+            return p;
+        }
+    }
+
+    // Not found
+    return std::nullopt;
+}
+
 class SimulationBackend : public std::enable_shared_from_this<SimulationBackend>
 {
   public:
@@ -294,6 +345,11 @@ class SimulationBackend : public std::enable_shared_from_this<SimulationBackend>
     [[nodiscard]] auto last_telemetry() const -> const std::optional<cwf::gpu::newmark::StepTelemetry> &
     {
         return last_telemetry_;
+    }
+
+    [[nodiscard]] auto shader_directory() const -> const std::filesystem::path &
+    {
+        return shader_directory_;
     }
 
     [[nodiscard]] auto solve(const StressVectorRequest &request, bool paused_mode)
@@ -1497,10 +1553,19 @@ VulkanViewer::VulkanViewer(GLFWwindow *window, const mesh::Mesh &source_mesh, Me
       simulation_time_(simulation_time), source_mesh_(&source_mesh), backend_(std::move(backend)),
       config_directory_(std::move(config_directory))
 {
-    shader_directory_ = std::filesystem::path{CWF_SHADER_BUILD_DIR};
-    if (!std::filesystem::exists(shader_directory_))
+    if (backend_ && !backend_->shader_directory().empty())
     {
-        throw std::runtime_error("shader directory missing: " + shader_directory_.string());
+        shader_directory_ = backend_->shader_directory();
+    }
+    else
+    {
+        const auto compile_time_shader_dir = std::filesystem::path{CWF_SHADER_BUILD_DIR};
+        const auto resolved_opt = resolve_shader_directory(compile_time_shader_dir);
+        if (!resolved_opt)
+        {
+            throw std::runtime_error("shader directory missing: " + compile_time_shader_dir.string());
+        }
+        shader_directory_ = *resolved_opt;
     }
     if (window_ == nullptr)
     {
@@ -4266,8 +4331,18 @@ auto VulkanViewer::load_shader_module(const std::filesystem::path &path) const -
 {
     try
     {
-        const auto shader_dir = std::filesystem::path{CWF_SHADER_BUILD_DIR};
-        auto       backend_expected = SimulationBackend::create(
+        const auto compile_time_shader_dir = std::filesystem::path{CWF_SHADER_BUILD_DIR};
+        const auto resolved_shader_dir_opt = resolve_shader_directory(compile_time_shader_dir);
+        if (!resolved_shader_dir_opt)
+        {
+            return std::unexpected(make_error("shader directory not found",
+                                             {compile_time_shader_dir.string(),
+                                              std::filesystem::current_path().string(),
+                                              "try building with Slang (slangc) or set CWF_SHADER_DIR env var"}));
+        }
+        const auto shader_dir = *resolved_shader_dir_opt;
+        log_viewer("resolved shader directory as '{}'", shader_dir.string());
+        auto backend_expected = SimulationBackend::create(
             std::move(packing), std::move(derived), std::move(materials), std::move(solver_settings),
             time_settings, rayleigh, simulation_time, shader_dir);
         if (!backend_expected)
