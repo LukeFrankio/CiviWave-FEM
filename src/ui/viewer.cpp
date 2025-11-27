@@ -49,6 +49,11 @@
 #include <utility>
 #include <vector>
 #include <cstdlib>
+#if defined(_WIN32)
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
 
 #include "cwf/gpu/device_buffers.hpp"
 #include "cwf/gpu/newmark_stepper.hpp"
@@ -232,6 +237,31 @@ struct MeshBuffers
  *
  * Returns an empty optional if no existing directory is found.
  */
+// Try to get the directory containing the running executable. Returns empty if unsupported.
+[[nodiscard]] auto executable_directory() noexcept -> std::optional<std::filesystem::path>
+{
+#if defined(_WIN32)
+    wchar_t buffer[MAX_PATH];
+    const DWORD len = GetModuleFileNameW(nullptr, buffer, static_cast<DWORD>(std::size(buffer)));
+    if (len == 0 || len == std::size(buffer))
+    {
+        return std::nullopt;
+    }
+    std::filesystem::path exe{buffer};
+    return exe.parent_path();
+#else
+    char buf[4096];
+    const ssize_t l = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    if (l <= 0)
+    {
+        return std::nullopt;
+    }
+    buf[l] = '\0';
+    std::filesystem::path exe(buf);
+    return exe.parent_path();
+#endif
+}
+
 [[nodiscard]] auto resolve_shader_directory(const std::filesystem::path &configured) noexcept
     -> std::optional<std::filesystem::path>
 {
@@ -253,11 +283,15 @@ struct MeshBuffers
 
     // 3) try CWD and some common relatives
     const std::filesystem::path cwd = std::filesystem::current_path();
-    const std::vector<std::filesystem::path> candidates = {
-        cwd / "shaders",
-        cwd.parent_path() / "shaders",
-        cwd.parent_path().parent_path() / "shaders",
-    };
+    std::vector<std::filesystem::path> candidates;
+    candidates.push_back(cwd / "shaders");
+    candidates.push_back(cwd.parent_path() / "shaders");
+    candidates.push_back(cwd.parent_path().parent_path() / "shaders");
+    if (const auto exe_dir = executable_directory(); exe_dir)
+    {
+        candidates.push_back(*exe_dir / "shaders");
+        candidates.push_back(*exe_dir);
+    }
     for (const auto &p : candidates)
     {
         if (!p.empty() && std::filesystem::is_directory(p))
@@ -4335,10 +4369,22 @@ auto VulkanViewer::load_shader_module(const std::filesystem::path &path) const -
         const auto resolved_shader_dir_opt = resolve_shader_directory(compile_time_shader_dir);
         if (!resolved_shader_dir_opt)
         {
-            return std::unexpected(make_error("shader directory not found",
-                                             {compile_time_shader_dir.string(),
-                                              std::filesystem::current_path().string(),
-                                              "try building with Slang (slangc) or set CWF_SHADER_DIR env var"}));
+            // Log attempted locations so callers who don't print context still see the helpful details.
+            log_viewer("shader directory not found: attempted compile-time '{}' and cwd '{}'",
+                       compile_time_shader_dir.string(), std::filesystem::current_path().string());
+            if (const auto exe_dir_opt = executable_directory(); exe_dir_opt)
+            {
+                log_viewer("shader directory not found: executable dir '{}'", exe_dir_opt->string());
+            }
+            ViewerError err = make_error("shader directory not found",
+                                         {compile_time_shader_dir.string(),
+                                          std::filesystem::current_path().string()});
+            if (const auto exe_dir_opt = executable_directory(); exe_dir_opt)
+            {
+                err.context.emplace_back(exe_dir_opt->string());
+            }
+            err.context.emplace_back("Try packaging the shaders next to the executable, set CWF_SHADER_DIR, or build with Slang.");
+            return std::unexpected(err);
         }
         const auto shader_dir = *resolved_shader_dir_opt;
         log_viewer("resolved shader directory as '{}'", shader_dir.string());

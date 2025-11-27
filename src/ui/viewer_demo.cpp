@@ -276,6 +276,14 @@ auto main() -> int
     if (!viewer_status)
     {
         std::print(stderr, "viewer error: {}\n", viewer_status.error().message);
+        if (!viewer_status.error().context.empty())
+        {
+            std::print(stderr, "context:\n");
+            for (const auto &c : viewer_status.error().context)
+            {
+                std::print(stderr, "  - {}\n", c);
+            }
+        }
         return EXIT_FAILURE;
     }
 

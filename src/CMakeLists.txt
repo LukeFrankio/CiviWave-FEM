@@ -91,6 +91,13 @@ if(BUILD_UI)
 	set_source_files_properties(${CWF_VIEWER_VERT} ${CWF_VIEWER_FRAG} PROPERTIES HEADER_FILE_ONLY TRUE)
 	target_sources(cwf_core PRIVATE ${CWF_VIEWER_VERT} ${CWF_VIEWER_FRAG})
 	add_dependencies(cwf_core viewer_shaders)
+		# Ensure shaders are copied next to the viewer binary so users running the exe directly
+		# (from a different working directory) can find the shaders via our runtime discovery.
+		add_custom_command(TARGET cwf_viewer_demo POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:cwf_viewer_demo>/shaders"
+			COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_BINARY_DIR}/shaders" "$<TARGET_FILE_DIR:cwf_viewer_demo>/shaders"
+			COMMENT "Copying compiled shaders next to cwf_viewer_demo"
+		)
 endif()
 
 target_compile_definitions(cwf_core PUBLIC CWF_ENABLE_UI=$<BOOL:${BUILD_UI}>)

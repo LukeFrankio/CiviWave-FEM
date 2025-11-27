@@ -1110,6 +1110,8 @@ auto Stepper::enable_gpu(const gpu::VulkanContext &context, gpu::DeviceBufferAre
 
     if (!std::filesystem::is_directory(shader_directory))
     {
+        // Help debugging by logging the attempted shader path.
+        std::fprintf(stderr, "shader directory not found: '%s'\n", shader_directory.string().c_str());
         return std::unexpected(make_error("shader directory not found", {shader_directory.string()}));
     }
 
