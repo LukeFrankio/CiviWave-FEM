@@ -10,7 +10,7 @@ jobs:
   validation-tests:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Install modern toolchain
         run: |
@@ -103,7 +103,7 @@ jobs:
 
       - name: Upload Test Logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: validation-test-logs
           path: |
