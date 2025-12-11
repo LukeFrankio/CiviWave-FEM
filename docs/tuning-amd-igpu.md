@@ -32,4 +32,6 @@ AMD Radeon™ integrated GPU.
    the per-frame telemetry log.
 2. Capture GPU traces with RGP when iteration counts spike or frame times swing.
 3. Track compiler flags and shader revisions in [`docs/decisions.yaml`](decisions.yaml)
-   whenever tuning changes behaviour across driver updates.
+  whenever tuning changes behaviour across driver updates. See
+  [`docs/profiling.md`](profiling.md) for RGP/Tracy workflows and telemetry
+  details.

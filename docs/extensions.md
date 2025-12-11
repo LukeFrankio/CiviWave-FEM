@@ -1,28 +1,27 @@
 # Compiler extensions policy (GCC-focused, C++26)
 
-This document defines how and when we use compiler extensions to squeeze performance while keeping behavior well-defined and portable across compilers as much as practical.
+Updated 2025-12-11. This document defines how and when we use compiler extensions to squeeze performance while keeping behavior well-defined and portable across compilers as much as practical.
 
 - Standard: C++26 (`-std=c++2c`), optionally `-std=gnu++2c` for guarded GNU extensions.
 - Primary compiler: GCC 15.x. Clang/MSVC supported on a best-effort basis.
 - Philosophy: prefer zero-cost abstractions; prove wins with profiling; isolate extensions behind macros.
+- Portability header: planned location `include/cwf/common/port.hpp`. Until it lands, keep macros localized near their use sites and avoid copy/paste drift. When the header is added, migrate definitions there.
 
 ## Restrict semantics (aliasing)
 
 We centralize restrict semantics behind a project macro to assert non-aliasing only when provably safe.
 
+Example (planned header once introduced):
+
 ```cpp
-// util/port.hpp (sketch)
-#ifndef CW_PORT_HPP
-#define CW_PORT_HPP
-
 #if defined(__GNUC__) || defined(__clang__)
-  #define CW_RESTRICT __restrict__
+#  define CW_RESTRICT __restrict__
 #else
-  #define CW_RESTRICT
+#  define CW_RESTRICT
 #endif
-
-#endif // CW_PORT_HPP
 ```
+
+Until the header exists, place the macro in the narrowest possible scope (e.g., a private detail header) and avoid multiple definitions.
 
 Usage guidelines:
 
@@ -50,7 +49,7 @@ Guidelines:
 
 - Do not blanket-mark large functions as always_inline.
 - Use `[[gnu::hot]]`/`[[gnu::cold]]` only when profiles show persistent skew.
-- Pair `CW_ASSUME_ALIGNED` with actual alignment guarantees (allocators, layout). Add `static_assert` on types and runtime checks in Debug.
+- Pair `CW_ASSUME_ALIGNED` with actual alignment guarantees (allocators, layout). Add `static_assert` on types and runtime checks in Debug/Profile (with sanitizers enabled via `ENABLE_SANITIZERS=ON`).
 
 ## Builtins and branch prediction
 
@@ -66,8 +65,8 @@ We use builtins sparingly to clarify intent to the optimizer.
 
 Guidelines:
 
-- Prefer writing code with obvious control flow; add hints only on proven hot paths.
-- `CW_ASSUME` may enable vectorization but introduces UB if the assumption is false—guard with Debug asserts.
+- Prefer writing code with obvious control flow; add hints only on proven hot paths backed by profiles.
+- `CW_ASSUME` may enable vectorization but introduces UB if the assumption is false—guard with Debug asserts and sanitize builds.
 
 ## Vectorization hints
 
@@ -82,10 +81,9 @@ CW_ALWAYS_INLINE f32x4 fmadd(f32x4 a, f32x4 b, f32x4 c) {
 }
 ```
 
-Guidelines:
-
 - Only apply where data is naturally aligned and contiguous.
 - Validate codegen on GCC 15+ and check for fallback on other compilers.
+- Prefer fixed-size structs/spans over raw pointers when possible; document layout assumptions.
 
 ## Loop hints and pragmas
 
@@ -100,20 +98,20 @@ void saxpy(float * CW_RESTRICT y, const float * CW_RESTRICT x, float a, int n) {
 }
 ```
 
-Guidelines:
-
 - `ivdep` is appropriate when you guarantee no loop-carried dependencies.
 - Prefer data layout changes (SoA) over pragmas to enable vectorization.
+- Document the proof (in comments or PR description) that no loop-carried dependencies exist.
 
 ## Safety and validation
 
 - Add `static_assert` for type sizes and alignments where assumptions are made.
 - In Debug/Profile, add runtime checks for aliasing and alignment assumptions.
-- Use sanitizers where applicable; ensure no UB from incorrect `restrict` or `assume` usage.
+- Use sanitizers where applicable (`ENABLE_SANITIZERS=ON` in Debug/Profile presets); ensure no UB from incorrect `restrict` or `assume` usage.
+- When `slangc` is absent, GPU code falls back to stub shaders—do not infer performance from stubbed builds.
 
 ## Cross-compiler behavior
 
-- Wrap all non-standard features behind macros in a single portability header.
+- Wrap all non-standard features behind macros in a single portability header once added; until then, keep definitions local and avoid duplication.
 - Provide conservative fallbacks for compilers without the GNU attributes/builtins.
 - Gate risky extensions behind `#ifdef __GNUC__` and feature checks.
 

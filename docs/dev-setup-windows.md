@@ -1,18 +1,19 @@
 # Windows 11 developer setup (GCC/MinGW, CMake, Vulkan SDK)
 
-A concise, zero-drama setup to build and run CiviWave-FEM on Windows 11 using GCC 15.x, CMake 4.1.2, and the Vulkan SDK. Versions below reflect the canonical minimums/as-of pins; prefer newer if available.
+A concise, zero-drama setup to build and run CiviWave-FEM on Windows 11 using GCC 15.x, CMake 4.1.2, and the Vulkan SDK. Versions below reflect the canonical minimums/as-of pins; prefer newer/beta if available.
 
-## Toolchain targets (as of 2025-11-03)
+## Toolchain targets (as of 2025-12-11)
 
 - GCC: 15.2 (C++26 via `-std=c++2c`)
 - CMake: 4.1.2
-- Vulkan SDK: 1.4.328.1
+- Vulkan SDK: 1.4.328.1 (runtime target Vulkan 1.3; 1.4 features are gated)
+- Slang: 2025.18 (`slangc` on PATH or `SLANGC` env var recommended)
 - Doxygen: 1.15+ (beta preferred)
 - Python: 3.11+
 - Git + Git LFS
 - Optional: AMD RGP/RGA (profiling)
 
-See `docs/versions.yaml` for the living source of truth.
+See `docs/versions.yaml` for the living source of truth and `docs/build-and-test.md` for build commands.
 
 ## 1. Install GCC (MinGW-w64)
 
@@ -128,15 +129,13 @@ vulkaninfo | Select-String -Pattern "apiVersion" -SimpleMatch | Select-Object -F
 
 ## 10. First configure (no build yet)
 
-After cloning the repo and setting up PATHs, do an initial CMake configure. We recommend the Ninja generator; if you do not have Ninja, CMake will fall back to the default generator.
+After cloning the repo and setting up PATHs, do an initial CMake configure using presets (case-sensitive):
 
 ```powershell
-# Create build directory and configure
-New-Item -ItemType Directory -Force -Path build | Out-Null
-cmake -S . -B build -G Ninja -DFORCE_FETCH_DEPS=ON -DENABLE_VALIDATION=ON
+cmake --preset Debug   # or Release / RelWithDebInfo / Profile
 ```
 
-If this is your first configure on this machine, the project will fetch and build dependencies from source as needed on the first full build. That step may take a while; the command above only configures.
+Presets use Ninja by default and place build trees under `build/<Preset>`. If this is your first configure on this machine, the project will fetch and build dependencies from source as needed on the first full build. That step may take a while; the command above only configures.
 
 ## Troubleshooting tips
 

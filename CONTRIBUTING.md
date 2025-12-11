@@ -13,20 +13,22 @@ Expectations for kindness, respect, and zero tolerance for harassment live in
 
 1. Fork the repo and branch from `dev`. Name branches like
    `feature/predictor-kernel` or `bugfix/vulkan-sync` so everyone knows the vibe.
-2. Install the toolchain: GCC 15.2+, CMake 4.1.2+, Vulkan SDK 1.4.328.1+,
-   Doxygen 1.15+, and Python 3.11+ for scripts. Prefer latest betas when
-   available.
-3. Configure with CMake presets:
-   - `cmake --preset debug` for assertions and validation layers
-   - `cmake --preset release` for performance sweeps
-   - `cmake --preset profile` when you are ready for Tracy + RGP deep dives
+2. Install the toolchain: GCC 15.2+, CMake 4.1.2+, Vulkan SDK 1.4.328.1+
+   (runtime target Vulkan 1.3), Doxygen 1.15+, and Python 3.11+ for scripts.
+   Prefer latest betas when available.
+3. Configure with CMake presets (case-sensitive):
+   - `cmake --preset Debug` for assertions and validation layers
+   - `cmake --preset Release` for performance sweeps
+   - `cmake --preset Profile` when you are ready for Tracy + RGP deep dives
 4. Let FetchContent build dependencies from source unless your system packages
    match compiler family, version, and flags exactly. No opaque binaries allowed
-   (no cap).
+   (no cap). If `slangc` is missing, stub SPIR-V is emitted so builds still
+   succeed; set `SLANGC` to enable real shader compilation.
 
 ## Coding standards
 
-- Use C++26 with GCC-specific extensions housed in `util/port.hpp` (coming soon).
+- Use C++26 with GCC-specific extensions. Until a shared portability header lands,
+  keep macros localized and gated behind compiler checks.
 - Keep everything clang-formatted (`.clang-format`) and clang-tidy clean
   (`.clang-tidy`). Treat warnings as blockers.
 - Document every function with maximalist Doxygen comments that call out purity,

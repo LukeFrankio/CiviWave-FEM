@@ -4,7 +4,7 @@
 
 meta:
   project: CiviWave-FEM
-  generated_at: 2025-11-03
+  generated_at: 2025-12-11
   policy: latest-preferred  # prefer newest (stable or beta); pins are minimum known-good
   update_cadence: weekly    # review and bump weekly; immediately for security updates
 
@@ -42,6 +42,10 @@ versions:
     preferred: 1.15
     minimum: 1.10
     notes: "HTML docs; prefer latest beta, enable dot/Graphviz for diagrams."
+  googletest:
+    preferred: 1.15.0
+    minimum: 1.14.0
+    notes: "Used for unit/regression tests via FetchContent in tests/CMakeLists.txt."
 
 notes:
   - "These versions align with PLAN.md and SPEC.md as of 2025-11-03."

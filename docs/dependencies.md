@@ -35,9 +35,10 @@ If any check fails, we build from source via `FetchContent`.
 
 ## Libraries and expectations
 
-- Slang: prefer using a prebuilt `slangc` binary (install it or set SLANGC env var). Building Slang from source is possible but not performed by default due to platform-specific dependencies and submodule complexity.
+- Slang: prefer using a prebuilt `slangc` binary (install it or set SLANGC env var). Building Slang from source is possible but not performed by default due to platform-specific dependencies and submodule complexity. When `slangc` is absent, the build emits stub SPIR-V so the rest of the pipeline still builds (GPU execution will be disabled until real shaders are compiled).
 - VMA: header-only; include at the pinned version.
 - `yaml-cpp`: static library; tests off; exceptions per project policy.
+- GoogleTest: fetched via FetchContent at v1.15.0 for the unit/regression suite.
 
 ## Upgrade workflow
 

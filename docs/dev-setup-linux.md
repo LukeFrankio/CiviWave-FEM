@@ -2,11 +2,12 @@
 
 Guidance to build and run CiviWave-FEM on Linux using GCC 15.x and CMake 4.1.2 with the Vulkan SDK installed. Prefer the latest stable or beta versions; pins below are minimum known-good.
 
-## Toolchain targets (as of 2025-11-03)
+## Toolchain targets (as of 2025-12-11)
 
 - GCC: 15.x (C++26 via `-std=c++2c`)
 - CMake: 4.1.2
-- Vulkan SDK: 1.4.x (headers, validation layers, tools)
+- Vulkan SDK: 1.4.x (runtime target Vulkan 1.3; features gated at runtime)
+- Slang: 2025.18 (`slangc` recommended via `SLANGC` env var)
 - Doxygen: 1.15+
 - Python: 3.11+
 - Git + Git LFS
@@ -88,12 +89,13 @@ vulkaninfo | head -n 20
 
 ## 6. First configure (no build yet)
 
+Use presets (case-sensitive):
+
 ```bash
-mkdir -p build
-cmake -S . -B build -G Ninja -DFORCE_FETCH_DEPS=ON -DENABLE_VALIDATION=ON
+cmake --preset Debug   # or Release / RelWithDebInfo / Profile
 ```
 
-If this is the first configure on the machine, dependencies will be fetched and built on the first full build. That step may take a while.
+Presets place build trees under `build/<Preset>` and default to Ninja. If this is the first configure on the machine, dependencies will be fetched and built on the first full build. That step may take a while.
 
 ## Troubleshooting tips
 

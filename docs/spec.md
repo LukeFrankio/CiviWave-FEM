@@ -5,6 +5,19 @@ The authoritative, fully detailed version lives in
 [RefDocs/SPEC.md](../RefDocs/SPEC.md). Keep both documents in sync when the spec
 changes.
 
+## Implementation snapshot (2025-12-11)
+
+- YAML loader, mesh importer (Gmsh v4 ASCII), preprocessing (gradN, volumes,
+  adjacency), and CPU matrix-free PCG + Newmark reference are implemented and
+  exercised in the test suite.
+- Vulkan device + buffer + descriptor infrastructure is present; Slang shader
+  compilation runs when `slangc` is available. Without `slangc`, stub SPIR-V is
+  emitted so the build still succeeds (GPU execution disabled).
+- Instrumentation emits FrameLog YAML and RGP markers; optional Tracy
+  integration is wired behind `ENABLE_TRACY`.
+- No CLI entry point is bundled yet; the library/tests (and optional viewer
+  when `BUILD_UI=ON`) are the runnable targets.
+
 ## Scope Highlights
 
 - 3D linear elasticity with optional corotational support for moderate
@@ -19,11 +32,12 @@ changes.
 ## Key Requirements
 
 1. **Toolchain:** GCC 15.2 or newer with `-std=c++2c`, CMake 4.1.2, Vulkan SDK
-  1.4.328.1, Slang 2025.18, and Doxygen 1.15+ for documentation builds. Prefer
-  latest beta releases when available.
+  1.4.328.1 (runtime target Vulkan 1.3), Slang 2025.18, and Doxygen 1.15+ for
+  documentation builds. Prefer latest beta releases when available.
 2. **Runtime Features:** shaderFloat64, descriptor indexing with
-   `VK_EXT_descriptor_buffer`, buffer device address, timeline semaphores, and
-   subgroup size control pinned to 64 lanes.
+  `VK_EXT_descriptor_buffer`, buffer device address, timeline semaphores, and
+  subgroup size control pinned to 64 lanes. Vulkan 1.3 is required at runtime;
+  1.4 is preferred when available.
 3. **Performance Targets:** 10–30 Hz for workloads between 50k and 150k DOFs,
    with solver residual tolerances of $2\times10^{-4}$ during runtime and
    tighter thresholds when paused.

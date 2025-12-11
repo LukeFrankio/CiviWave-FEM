@@ -5,6 +5,16 @@ its full reference document. For deep dives, read the
 [comprehensive plan](../RefDocs/PLAN.md) that describes every milestone in
 exhaustive detail.
 
+## Status snapshot (2025-12-11)
+
+- Phases 0–5: complete (tooling, CMake scaffolding, YAML config loader, mesh
+  import + preprocessing, CPU reference solver, Vulkan device/memory setup).
+- Phases 6–9: in-flight; Slang shaders, PCG/Newmark orchestration, and GPU
+  pipelines are present with stub SPIR-V fallback when `slangc` is missing.
+- UI/packaging: optional viewer builds when `BUILD_UI=ON`; no default CLI yet.
+- Validation: unit/integration suites cover config, mesh, preprocessing,
+  derived fields, PCG/Newmark, instrumentation, and VTU export.
+
 ## Phase Overview
 
 - **Phase 0 – Repository bootstrapping:** lay down licensing, contribution
