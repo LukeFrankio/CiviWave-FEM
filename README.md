@@ -1,3 +1,4 @@
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/LukeFrankio/CiviWave-FEM)
 # CiviWave-FEM
 
 CiviWave-FEM is a C++26 + Vulkan playground for matrix-free FEM targeting an
